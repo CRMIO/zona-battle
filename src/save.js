@@ -11,6 +11,7 @@ const DEFAULT = {
   matches: 0,
   kills: 0,
   rp: { build: 0, zero: 0 },           // punti rank per modalità (con costruzioni / zero costruzioni)
+  bestRp: { build: 0, zero: 0 },       // record di punti rank: le skin dei rank restano anche se scendi
   mode: { build: true, ranked: false }, // ultima modalità scelta nella lobby
 };
 
@@ -24,6 +25,7 @@ export function loadSave() {
         ...data,
         owned: Array.from(new Set([...DEFAULT.owned, ...(data.owned || [])])),
         rp: { ...DEFAULT.rp, ...(data.rp || {}) },
+        bestRp: { ...DEFAULT.bestRp, ...(data.bestRp || {}) },
         mode: { ...DEFAULT.mode, ...(data.mode || {}) },
       };
     }

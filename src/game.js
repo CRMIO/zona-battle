@@ -96,7 +96,8 @@ export class Game {
     const names = BOT_NAMES.slice().sort(() => this.rng() - 0.5);
     for (let i = 0; i < CONFIG.BOTS; i++) {
       const s = findSpot();
-      const skin = SKINS[Math.floor(this.rng() * SKINS.length)];
+      const pool = SKINS.filter((k) => k.tier !== 'rank'); // le skin dei rank restano speciali
+      const skin = pool[Math.floor(this.rng() * pool.length)];
       const round = Math.floor(i / names.length);
       const name = names[i % names.length] + (round ? ' ' + (round + 1) : '');
       const bot = new Character(s.x, s.y, name, skin, false);

@@ -201,6 +201,48 @@ function drawPattern(ctx, s, r, t) {
       ctx.stroke();
       ctx.shadowBlur = 0;
       break;
+    case 'rank': {
+      // skin dei rank: armatura con lo stemma del rank sul petto
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.82, 0, TAU);
+      ctx.stroke();
+      ctx.fillStyle = s.body2;
+      ctx.strokeStyle = s.body2;
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = 'round';
+      ctx.save();
+      ctx.translate(-5, 0);
+      ctx.rotate(-Math.PI / 2);
+      const e = s.emblem;
+      if (e.startsWith('chev')) {
+        const n = Number(e.slice(4));
+        for (let i = 0; i < n; i++) {
+          const y = (i - (n - 1) / 2) * 5;
+          ctx.beginPath();
+          ctx.moveTo(-7, y + 3); ctx.lineTo(0, y - 2); ctx.lineTo(7, y + 3);
+          ctx.stroke();
+        }
+      } else {
+        ctx.beginPath();
+        if (e === 'star') {
+          for (let i = 0; i < 10; i++) {
+            const a = -Math.PI / 2 + (i * Math.PI) / 5;
+            const d = i % 2 ? 3.2 : 7.5;
+            ctx.lineTo(Math.cos(a) * d, Math.sin(a) * d);
+          }
+        } else if (e === 'crown') {
+          ctx.moveTo(-8, 5); ctx.lineTo(-8, -5); ctx.lineTo(-4, 0); ctx.lineTo(0, -7); ctx.lineTo(4, 0); ctx.lineTo(8, -5); ctx.lineTo(8, 5);
+        } else {
+          const k = e === 'bigdiamond' ? 9 : 7;
+          ctx.moveTo(0, -k); ctx.lineTo(k * 0.8, 0); ctx.lineTo(0, k); ctx.lineTo(-k * 0.8, 0);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+      break;
+    }
     case 'armor':
       ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -357,6 +399,29 @@ function drawHead(ctx, s, r, t) {
       ctx.stroke();
       ctx.fillStyle = '#05030a';
       ellipse(ctx, hx + hr * 0.45, 0, hr * 0.55, hr * 0.75);
+      ctx.fill();
+      break;
+    case 'crown':
+      ctx.fillStyle = s.hair;
+      circle(ctx, hx, 0, hr * 1.02);
+      ctx.fill();
+      ctx.shadowColor = s.hatColor;
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = s.hatColor;
+      ctx.strokeStyle = '#6e4a00';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * TAU;
+        const d = i % 2 ? hr * 0.62 : hr * 1.05;
+        ctx.lineTo(hx + Math.cos(a) * d, Math.sin(a) * d);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#e0245e';
+      circle(ctx, hx, 0, hr * 0.28);
       ctx.fill();
       break;
     case 'plume':

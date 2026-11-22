@@ -1,5 +1,5 @@
 // Lobby: anteprima del personaggio, armadietto (skin possedute) e negozio (skin da comprare).
-import { SKINS, TIER_INFO, getSkin } from '../data/skins.js';
+import { SKINS, TIER_INFO, getSkin, rankSkinIndex } from '../data/skins.js';
 import { drawCharacter } from '../render/art.js';
 import { storeSave, modeKey } from '../save.js';
 import { TIERS, DIVISIONS, RP_PER_DIV, CHAMPION_RP, rankFromRP, nextRankName, rankBadgeSVG, allRanks } from '../data/ranks.js';
@@ -111,7 +111,7 @@ export class Lobby {
   }
 
   buy(skin) {
-    if (this.save.owned.includes(skin.id)) return;
+    if (this.save.owned.includes(skin.id) || skin.tier === 'rank') return;
     if (this.save.coins < skin.price) {
       this.toast(`Ti mancano ${skin.price - this.save.coins} monete`);
       return;
@@ -147,7 +147,10 @@ export class Lobby {
 
     const action = this.root.querySelector('[data-action]');
     action.innerHTML = '';
-    if (!owned) {
+    if (!owned && skin.tier === 'rank') {
+      const need = rankFromRP(rankSkinIndex(skin) * RP_PER_DIV).name;
+      action.innerHTML = `<div class="missing locked">🔒 Gratis: si sblocca raggiungendo <b>${need}</b> in una classificata</div>`;
+    } else if (!owned) {
       const btn = document.createElement('button');
       btn.className = 'buy';
       btn.innerHTML = `Compra · <span class="coin small"></span> ${skin.price.toLocaleString('it-IT')}`;
@@ -193,7 +196,10 @@ export class Lobby {
       card.appendChild(name);
       const foot = document.createElement('div');
       foot.className = 'card-foot';
-      if (this.tab === 'shop') {
+      if (this.tab === 'shop' && k.tier === 'rank') {
+        foot.textContent = '🔒 ' + rankFromRP(rankSkinIndex(k) * RP_PER_DIV).name;
+        foot.classList.add('poor');
+      } else if (this.tab === 'shop') {
         foot.innerHTML = `<span class="coin small"></span> ${k.price.toLocaleString('it-IT')}`;
         if (s.coins < k.price) foot.classList.add('poor');
       } else {
@@ -252,6 +258,27 @@ export class Lobby {
       const list = ranks.filter((r) => r.tierIndex === ti);
       row.innerHTML = `<div class="tier-name" style="color:${tier.light}">${tier.name}</div>` +
         list.map((r) => `<div class="tier-cell ${r.index === mine.index ? 'mine' : ''}" title="${r.name} · da ${r.floor} RP">${rankBadgeSVG(r, 46)}<span>${r.floor}</span></div>`).join('');
+      // premio del rank: skin gratis
+      const reward = SKINS.find((k) => k.tier === 'rank' && k.rank === ti);
+      if (reward) {
+        const got = this.save.owned.includes(reward.id);
+        const cell = document.createElement('button');
+        cell.className = 'tier-reward' + (got ? ' got' : '');
+        cell.title = reward.name;
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = 120;
+        cell.appendChild(cv);
+        const lab = document.createElement('span');
+        lab.textContent = got ? reward.name : '🔒 ' + reward.name;
+        cell.appendChild(lab);
+        cell.addEventListener('click', () => {
+          this.preview = reward.id;
+          if (got) this.equip(reward);
+          else this.render();
+        });
+        row.appendChild(cell);
+        this.drawCard(cv, reward);
+      }
       grid.appendChild(row);
     });
   }

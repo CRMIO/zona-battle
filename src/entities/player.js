@@ -47,7 +47,12 @@ export class PlayerController {
     let target;
     if (touch.enabled) {
       if (touch.aiming) this.touchAim = touch.aimAngle;
-      else if (it.mx || it.my) this.touchAim = Math.atan2(it.my, it.mx);
+      else if (touch.fire && !this.buildMode) {
+        // pulsante di fuoco premuto senza trascinarlo: mira da solo al nemico più vicino
+        const e = this.nearestEnemy(game);
+        if (e) this.touchAim = Math.atan2(e.y - me.y, e.x - me.x);
+        else if (it.mx || it.my) this.touchAim = Math.atan2(it.my, it.mx);
+      } else if (it.mx || it.my) this.touchAim = Math.atan2(it.my, it.mx);
       it.aim = this.touchAim === null ? me.angle : this.touchAim;
       target = { x: me.x + Math.cos(it.aim) * 100, y: me.y + Math.sin(it.aim) * 100 };
     } else {
@@ -99,6 +104,22 @@ export class PlayerController {
     it.interact = input.isDown('KeyE');
     it.interactPressed = input.wasPressed('KeyE');
     if (input.wasPressed('KeyM')) game.showBigMap = !game.showBigMap;
+  }
+
+  nearestEnemy(game) {
+    const me = this.me;
+    const range = me.weapon ? Math.min(me.weapon.range, 700) : 120;
+    let best = null;
+    let bd = range;
+    for (const c of game.chars) {
+      if (c === me || !c.alive) continue;
+      const d = Math.hypot(c.x - me.x, c.y - me.y);
+      if (d < bd && !game.map.lineBlocked(me.x, me.y, c.x, c.y)) {
+        bd = d;
+        best = c;
+      }
+    }
+    return best;
   }
 
   pick(it, slot) {

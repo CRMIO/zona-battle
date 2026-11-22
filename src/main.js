@@ -4,11 +4,27 @@ import { Lobby } from './ui/lobby.js';
 import { TouchControls } from './ui/touch.js';
 import { loadSave, storeSave, modeKey, modeName } from './save.js';
 import { rankFromRP, matchRP, rankBadgeSVG } from './data/ranks.js';
+import { SKINS, rankSkinIndex } from './data/skins.js';
+
+// Sblocca le skin dei rank raggiunti (record migliore tra le due modalità). Restituisce quelle nuove.
+function unlockRankSkins(save) {
+  for (const k of ['build', 'zero']) save.bestRp[k] = Math.max(save.bestRp[k], save.rp[k]);
+  const best = rankFromRP(Math.max(save.bestRp.build, save.bestRp.zero)).index;
+  const fresh = [];
+  for (const k of SKINS) {
+    if (k.tier === 'rank' && best >= rankSkinIndex(k) && !save.owned.includes(k.id)) {
+      save.owned.push(k.id);
+      fresh.push(k);
+    }
+  }
+  return fresh;
+}
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const input = new Input(canvas);
 const save = loadSave();
+unlockRankSkins(save);
 const endEl = document.getElementById('end');
 const pauseEl = document.getElementById('pause');
 let game = null;
@@ -76,6 +92,8 @@ function matchEnded(result) {
     const calc = matchRP({ place: result.place, kills: result.kills, rp: before });
     const after = Math.max(0, before + calc.delta);
     save.rp[key] = after;
+    save.bestRp[key] = Math.max(save.bestRp[key], after);
+    const fresh = unlockRankSkins(save);
     const r0 = rankFromRP(before);
     const r1 = rankFromRP(after);
     const change = r1.index > r0.index ? `<p class="promo up">PROMOSSO A ${r1.name.toUpperCase()}!</p>`
@@ -89,7 +107,7 @@ function matchEnded(result) {
           <div class="rp-delta ${calc.delta >= 0 ? 'pos' : 'neg'}">${sign(after - before)} RP <small>(${after} RP)</small></div>
           <div class="rp-detail">Posizione ${sign(calc.placePts)} · Eliminazioni ${sign(calc.killPts)} · Ingresso -${calc.cost}</div>
         </div>
-      </div>${change}`;
+      </div>${change}${fresh.map((k) => `<p class="promo up">NUOVA SKIN SBLOCCATA: ${k.name}!</p>`).join('')}`;
   }
   storeSave(save);
   pauseEl.classList.add('hidden');

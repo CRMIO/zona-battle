@@ -53,7 +53,8 @@ export class Hud {
     this.vignettes(ctx, W, H);
     const mm = touch ? Math.min(120, H * 0.3) : Math.min(190, Math.max(130, W * 0.16));
     this.drawMap(ctx, W - 12 - mm, 12, mm, false);
-    this.drawInfo(ctx, W - 12, 12 + mm + 20);
+    if (touch) this.drawInfoCompact(ctx, W - 24 - mm, 24);
+    else this.drawInfo(ctx, W - 12, 12 + mm + 20);
 
     if (p.alive) {
       if (touch) {
@@ -316,6 +317,18 @@ export class Hud {
       yy += sz + 4;
     }
     if (!this.touch) text(ctx, modeName(g.mode), xRight, yy, { align: 'right', size: 12, color: g.mode.ranked ? '#ffd34d' : '#9fb0c2' });
+  }
+
+  // Telefono: info brevi a sinistra della minimappa (sotto ci sono i pulsanti)
+  drawInfoCompact(ctx, xRight, y) {
+    const g = this.game;
+    const st = g.storm;
+    const zone = Math.min(st.phase + 1, PHASES.length);
+    const time = st.state === 'final' ? 'finale' : (st.state === 'shrink' ? 'avanza ' : '') + fmt(st.timer);
+    text(ctx, `Vivi ${g.aliveCount} · Elim. ${g.player.kills}`, xRight, y, { align: 'right', size: 12, weight: 800 });
+    text(ctx, `Zona ${zone}/${PHASES.length} · ${time}`, xRight, y + 17, { align: 'right', size: 11, color: st.state === 'wait' ? '#e6eef5' : '#d8a6ff' });
+    const out = g.player.alive && !st.contains(g.player.x, g.player.y);
+    text(ctx, out ? `Nella tempesta! -${st.dps}/s` : `Tempesta ${st.dps}/s`, xRight, y + 33, { align: 'right', size: 11, color: out ? '#ff8a8a' : '#d8a6ff', weight: out ? 800 : 600 });
   }
 
   drawKillFeed(ctx, x, y) {
