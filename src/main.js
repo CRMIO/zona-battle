@@ -36,6 +36,37 @@ input.touch.enabled = forceTouch || window.matchMedia('(pointer: coarse)').match
 document.body.classList.toggle('touch', input.touch.enabled);
 
 const touchUi = new TouchControls(document.getElementById('touch'), input, { onPause: () => togglePause() });
+
+// ---------------------------------------------------------------- Schermo intero
+// Android, tablet e computer: si usa la funzione del browser.
+// iPhone: i browser non la permettono, quindi si spiega come aggiungere il gioco alla schermata Home
+// (aperto da lì parte senza le barre del browser).
+const fsHelp = document.getElementById('fs-help');
+const standalone = window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+const fsSupported = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+document.body.classList.toggle('standalone', standalone);
+
+function toggleFullscreen() {
+  const el = document.documentElement;
+  const current = document.fullscreenElement || document.webkitFullscreenElement;
+  if (current) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    return;
+  }
+  if (fsSupported) {
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    Promise.resolve(req.call(el)).then(() => {
+      if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+    }).catch(() => fsHelp.classList.remove('hidden'));
+  } else {
+    fsHelp.classList.remove('hidden');
+  }
+}
+touchUi.onFullscreen = toggleFullscreen;
+document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-fullscreen]')) toggleFullscreen();
+  if (e.target.closest('[data-fs-close]')) fsHelp.classList.add('hidden');
+});
 input.onTap = (x, y) => {
   if (!game || !input.touch.enabled) return;
   const slot = game.hud.hitSlot(x, y);
@@ -170,7 +201,10 @@ function frame(now) {
     game.camera.width = window.innerWidth;
     game.camera.height = window.innerHeight;
     if (!game.paused) game.update(dt);
-    if (input.touch.enabled) touchUi.setDropState(game.player);
+    if (input.touch.enabled) {
+      touchUi.setDropState(game.player);
+      touchUi.setUseState(game);
+    }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     game.render(game.paused ? 0 : dt);
   }

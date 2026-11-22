@@ -39,6 +39,7 @@ export class Lobby {
             <span>Partite <b data-stat="matches">0</b></span>
             <span>Eliminazioni <b data-stat="kills">0</b></span>
           </div>
+          <button class="fs-btn" data-fullscreen title="Schermo intero">⛶ Schermo intero</button>
           <div class="coins" title="Monete"><span class="coin"></span><b data-coins>0</b></div>
         </header>
         <main class="lobby-main">

@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Zona Battle">
+<meta name="theme-color" content="#0d1420">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
 <title>Zona Battle</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,6 +38,21 @@
 </div>
 
 <div id="end" class="screen overlay hidden"></div>
+
+<div id="fs-help" class="screen overlay hidden">
+  <div class="end-card">
+    <h1>SCHERMO INTERO</h1>
+    <p>Su iPhone i browser non lasciano andare a schermo intero una pagina web.
+      Puoi però aggiungere Zona Battle alla schermata Home: da lì si apre come un'app, senza le barre del browser.</p>
+    <ol class="fs-steps">
+      <li>Apri questa pagina in <b>Safari</b> (se sei dentro un'altra app, usa "Apri in Safari").</li>
+      <li>Tocca il pulsante <b>Condividi</b> (il quadrato con la freccia in su).</li>
+      <li>Scegli <b>Aggiungi alla schermata Home</b> e poi <b>Aggiungi</b>.</li>
+      <li>Apri il gioco dall'icona <b>Zona Battle</b> sulla schermata Home.</li>
+    </ol>
+    <div class="end-buttons"><button data-fs-close>Ho capito</button></div>
+  </div>
+</div>
 
 <script type="module" src="src/main.js"></script>
 </body>

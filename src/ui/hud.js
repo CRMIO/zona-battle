@@ -51,7 +51,7 @@ export class Hud {
     this.slotRects = [];
 
     this.vignettes(ctx, W, H);
-    const mm = touch ? Math.min(120, H * 0.3) : Math.min(190, Math.max(130, W * 0.16));
+    const mm = touch ? Math.min(120, H * 0.25) : Math.min(190, Math.max(130, W * 0.16));
     this.drawMap(ctx, W - 12 - mm, 12, mm, false);
     if (touch) this.drawInfoCompact(ctx, W - 24 - mm, 24);
     else this.drawInfo(ctx, W - 12, 12 + mm + 20);
@@ -402,7 +402,7 @@ export class Hud {
       }
     }
     if (!label) return;
-    if (this.touch) label = label.replace('[E] Tieni premuto per aprire', 'Tieni premuto USA per aprire').replace('[E] ', 'USA: ');
+    if (this.touch) label = label.replace('[E] Tieni premuto per aprire', 'Tieni premuto APRI CASSA per aprire').replace('[E] ', '');
     ctx.font = `700 15px ${FONT}`;
     const w = ctx.measureText(label).width + 28;
     panel(ctx, cx - w / 2, y - 20, w, 30, 6, 'rgba(0,0,0,0.65)');

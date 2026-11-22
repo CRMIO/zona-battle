@@ -34,16 +34,17 @@ export class TouchControls {
       <div class="t-zone t-left" data-stick="move"><div class="t-base"><div class="t-knob"></div></div></div>
       <div class="t-pad">
         <div class="t-fire" data-firestick><div class="t-fire-knob">${ICONS.bullet}</div></div>
-        <button class="t-round" style="--a:180deg" data-tap="KeyR" aria-label="Ricarica">${ICONS.reload}</button>
-        <button class="t-round t-label" style="--a:143deg" data-hold="KeyE">USA</button>
-        <button class="t-round" style="--a:106deg" data-tap="KeyF" aria-label="Piccone">${ICONS.pickaxe}</button>
-        <button class="t-round t-build" style="--a:69deg" data-tap="KeyQ" aria-label="Costruisci">${ICONS.build}</button>
-        <button class="t-round t-build t-outer" style="--a:128deg" data-piece aria-label="Pezzo">${ICONS.piece}</button>
-        <button class="t-round t-build t-outer" style="--a:98deg" data-tap="KeyG" aria-label="Modifica">${ICONS.edit}</button>
+        <button class="t-round" style="--a:196deg" data-tap="KeyR" aria-label="Ricarica">${ICONS.reload}</button>
+        <button class="t-round" style="--a:163deg" data-tap="KeyF" aria-label="Piccone">${ICONS.pickaxe}</button>
+        <button class="t-round t-build" style="--a:130deg" data-tap="KeyQ" aria-label="Costruisci">${ICONS.build}</button>
+        <button class="t-round t-build" style="--a:97deg" data-piece aria-label="Pezzo">${ICONS.piece}</button>
+        <button class="t-round t-build" style="--a:64deg" data-tap="KeyG" aria-label="Modifica">${ICONS.edit}</button>
       </div>
+      <button class="t-use" data-hold="KeyE" data-use>USA</button>
       <button class="t-jump hidden" data-jump>SALTA</button>
       <div class="t-top">
         <button class="t-small" data-tap="KeyM">MAPPA</button>
+        <button class="t-small" data-fs aria-label="Schermo intero">⛶</button>
         <button class="t-small" data-pause>II</button>
       </div>`;
 
@@ -77,6 +78,11 @@ export class TouchControls {
       e.preventDefault();
       input.pressed.add('Space');
     });
+    root.querySelector('[data-fs]').addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (this.onFullscreen) this.onFullscreen();
+    });
+    this.useBtn = root.querySelector('[data-use]');
     root.querySelector('[data-pause]').addEventListener('pointerdown', (e) => {
       e.preventDefault();
       onPause();
@@ -195,6 +201,27 @@ export class TouchControls {
     this.jumpBtn.classList.toggle('hidden', !label);
     if (label) this.jumpBtn.textContent = label;
     this.root.classList.toggle('in-air', !!label || player.phase === 'air');
+  }
+
+  // Il pulsante sotto quello di fuoco cambia nome in base a cosa hai vicino
+  setUseState(game) {
+    const p = game.player;
+    let label = 'USA';
+    let hot = false;
+    if (p.alive && p.phase === 'ground') {
+      if (p.nearChest) {
+        label = 'APRI CASSA';
+        hot = true;
+      } else if (game.nearestPickup(p, 64, true)) {
+        label = 'RACCOGLI';
+        hot = true;
+      }
+    }
+    if (label !== this.useLabel) {
+      this.useLabel = label;
+      this.useBtn.textContent = label;
+    }
+    this.useBtn.classList.toggle('hot', hot);
   }
 
   setBuildVisible(on) {
