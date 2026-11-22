@@ -1,59 +1,69 @@
-import { CONFIG } from '../config.js';
 import { circleHits } from '../systems/physics.js';
 
+const STEP = 10; // il proiettile avanza a piccoli passi per non "saltare" oltre gli oggetti
+
 export class Bullet {
-  constructor(x, y, angle) {
+  constructor(owner, x, y, angle, def, damage) {
+    this.owner = owner;
     this.x = x;
     this.y = y;
     this.prevX = x;
     this.prevY = y;
-    this.vx = Math.cos(angle) * CONFIG.BULLET_SPEED;
-    this.vy = Math.sin(angle) * CONFIG.BULLET_SPEED;
-    this.life = CONFIG.BULLET_LIFE;
+    this.dx = Math.cos(angle);
+    this.dy = Math.sin(angle);
+    this.speed = def.speed;
+    this.remaining = def.range;
+    this.damage = damage;
+    this.weapon = def.id;
     this.dead = false;
   }
 
-  // Ritorna il punto d'impatto se ha colpito qualcosa
-  update(dt, map, targets) {
+  update(dt, game) {
     this.prevX = this.x;
     this.prevY = this.y;
-    this.life -= dt;
-    if (this.life <= 0) {
-      this.dead = true;
-      return null;
-    }
+    this.travel(Math.min(this.speed * dt, this.remaining), game);
+    if (this.remaining <= 0) this.dead = true;
+  }
 
-    // Avanza a piccoli passi per non "saltare" oltre gli oggetti sottili
-    const steps = 4;
-    for (let i = 0; i < steps; i++) {
-      this.x += (this.vx * dt) / steps;
-      this.y += (this.vy * dt) / steps;
+  travel(dist, game) {
+    this.remaining -= dist;
+    let left = dist;
+    while (left > 0 && !this.dead) {
+      const s = Math.min(STEP, left);
+      left -= s;
+      this.x += this.dx * s;
+      this.y += this.dy * s;
 
-      if (this.x < 0 || this.y < 0 || this.x > map.width || this.y > map.height) {
+      if (this.x < 0 || this.y < 0 || this.x > game.map.width || this.y > game.map.height) {
         this.dead = true;
-        return null;
+        return;
       }
-      for (const ob of map.query(this.x, this.y, 2)) {
-        if (circleHits(ob, this.x, this.y, 2)) {
+      for (const c of game.chars) {
+        if (c === this.owner || !c.alive) continue;
+        const ex = this.x - c.x;
+        const ey = this.y - c.y;
+        if (ex * ex + ey * ey < c.r * c.r) {
+          game.damage(c, this.damage, this.owner);
+          game.spark(this.x, this.y, '#ff5a4a', 6);
           this.dead = true;
-          return { x: this.x, y: this.y, kind: 'wall' };
+          return;
         }
       }
-      for (const t of targets) {
-        if (t.alive && Math.hypot(this.x - t.x, this.y - t.y) < t.r) {
-          t.hit(CONFIG.BULLET_DAMAGE);
+      for (const ob of game.map.queryObstacles(this.x, this.y, 1)) {
+        if (circleHits(ob, this.x, this.y, 1)) {
+          if (ob.kind === 'wall' || ob.kind === 'hwall') game.damageObstacle(ob, this.damage, null);
+          game.spark(this.x, this.y, ob.kind === 'rock' ? '#c9ccd0' : '#e0b070', 5);
           this.dead = true;
-          return { x: this.x, y: this.y, kind: 'hit' };
+          return;
         }
       }
     }
-    return null;
   }
 
   draw(ctx) {
-    // Traccia luminosa dalla posizione precedente
-    ctx.strokeStyle = 'rgba(255, 230, 120, 0.9)';
-    ctx.lineWidth = 3;
+    const sniper = this.weapon === 'sniper';
+    ctx.strokeStyle = sniper ? 'rgba(255,255,255,0.95)' : this.weapon === 'shotgun' ? 'rgba(255,210,120,0.9)' : 'rgba(255,230,120,0.95)';
+    ctx.lineWidth = sniper ? 4 : 2.5;
     ctx.beginPath();
     ctx.moveTo(this.prevX, this.prevY);
     ctx.lineTo(this.x, this.y);

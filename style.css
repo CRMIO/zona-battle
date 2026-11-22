@@ -1,28 +1,269 @@
+:root {
+  --bg: #0d1420;
+  --panel: rgba(18, 26, 40, 0.82);
+  --line: rgba(255, 255, 255, 0.12);
+  --text: #eef3f8;
+  --muted: #9fb0c2;
+  --accent: #ffd34d;
+  --blue: #3f9cff;
+  --display: 'Bungee', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
 html, body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #1d2b1f;
-  font-family: system-ui, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, 'Segoe UI', Arial, sans-serif;
 }
 
 #game {
   display: block;
   width: 100vw;
   height: 100vh;
-  cursor: none; /* il mirino è disegnato nel canvas */
+}
+#game.playing { cursor: none; }
+
+button { font: inherit; cursor: pointer; }
+
+.screen { position: fixed; inset: 0; z-index: 10; }
+.hidden { display: none !important; }
+.overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 8, 14, 0.55);
+  backdrop-filter: blur(2px);
 }
 
-#help {
+/* ---------------------------------------------------------------- Monete */
+.coin {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff3a8, #f5c518 45%, #b8860b);
+  box-shadow: inset 0 0 0 2px #a67800;
+  vertical-align: middle;
+}
+.coin.small { width: 15px; height: 15px; }
+
+/* ---------------------------------------------------------------- Lobby */
+#lobby {
+  background:
+    radial-gradient(ellipse at 30% 40%, rgba(63, 156, 255, 0.25), transparent 60%),
+    radial-gradient(ellipse at 80% 70%, rgba(180, 92, 255, 0.2), transparent 55%),
+    linear-gradient(160deg, #0f1b2e, #0a0f18 70%);
+  overflow-y: auto;
+}
+
+.lobby {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 24px;
+  gap: 16px;
+}
+
+.lobby-top {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.logo {
+  font-family: var(--display);
+  font-size: 34px;
+  letter-spacing: 1px;
+  color: #fff;
+  text-shadow: 0 3px 0 #1e5bb8, 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.logo span { color: var(--accent); margin-left: 8px; text-shadow: 0 3px 0 #b8860b, 0 6px 18px rgba(0, 0, 0, 0.5); }
+.stats { display: flex; gap: 18px; color: var(--muted); font-size: 14px; flex-wrap: wrap; }
+.stats b { color: var(--text); }
+.coins {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 211, 77, 0.4);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.lobby-main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(300px, 420px) 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+.preview { width: 100%; max-width: 360px; height: auto; aspect-ratio: 1; }
+.skin-name { font-family: var(--display); font-size: 26px; }
+.skin-tier {
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #0b0f16;
+}
+.stage-action { min-height: 44px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.buy {
+  padding: 10px 22px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(#ffe27a, #f5b700);
+  color: #2a1d00;
+  font-weight: 900;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.buy:disabled { filter: grayscale(0.8) brightness(0.7); cursor: not-allowed; }
+.missing { font-size: 13px; color: var(--muted); }
+.equipped { color: #5fdc8f; font-weight: 800; padding-top: 10px; }
+
+.play {
+  margin-top: 6px;
+  width: 100%;
+  max-width: 320px;
+  padding: 16px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(#ffe066, #f5b700);
+  color: #241800;
+  font-family: var(--display);
+  font-size: 30px;
+  box-shadow: 0 6px 0 #a67800, 0 12px 30px rgba(245, 183, 0, 0.35);
+  transition: transform 0.08s;
+}
+.play:hover { transform: translateY(-2px); }
+.play:active { transform: translateY(3px); box-shadow: 0 3px 0 #a67800; }
+.hint { color: var(--muted); font-size: 14px; margin: 4px 0 0; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  min-width: 0;
+}
+.tabs { display: flex; gap: 8px; }
+.tabs button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 16px;
+}
+.tabs button.active { background: var(--blue); color: #fff; border-color: transparent; }
+.panel-note { color: var(--muted); font-size: 14px; margin: 12px 0; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 8px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  color: var(--text);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  transition: transform 0.1s, border-color 0.1s;
+}
+.card:hover { transform: translateY(-3px); }
+.card canvas { width: 110px; height: 110px; }
+.card.tier-basic { background: linear-gradient(160deg, rgba(63, 156, 255, 0.35), rgba(63, 156, 255, 0.06)); }
+.card.tier-premium { background: linear-gradient(160deg, rgba(255, 169, 40, 0.45), rgba(180, 92, 255, 0.15)); }
+.card.active { border-color: #fff; }
+.card.selected .card-foot { color: #5fdc8f; }
+.card-name { font-weight: 800; margin-top: 4px; font-size: 14px; }
+.card-foot { font-size: 13px; color: var(--accent); font-weight: 800; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.card-foot.poor { color: var(--muted); }
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.controls b { color: var(--text); }
+
+.toast {
   position: fixed;
   left: 50%;
-  bottom: 12px;
-  transform: translateX(-50%);
-  padding: 6px 12px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.45);
-  color: #f2f2f2;
-  font-size: 13px;
+  bottom: 40px;
+  transform: translate(-50%, 20px);
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
   pointer-events: none;
-  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------------------------------------------------------------- Fine partita / pausa */
+.end-card {
+  width: min(420px, calc(100vw - 32px));
+  padding: 28px;
+  border-radius: 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.end-card h1 { font-family: var(--display); font-size: 44px; margin: 0 0 8px; font-weight: 400; }
+.end-card.win h1 { color: var(--accent); text-shadow: 0 4px 0 #a67800; }
+.end-card.lose h1 { color: #ff6b6b; }
+.end-card p { margin: 6px 0; color: var(--muted); }
+.end-card p b { color: var(--text); }
+.end-card .place { font-size: 22px; color: var(--text); font-weight: 800; }
+.end-card .reward { font-size: 20px; color: var(--accent); font-weight: 900; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.end-buttons { display: flex; gap: 10px; margin-top: 18px; }
+.end-buttons button {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  border: 0;
+  background: linear-gradient(#ffe066, #f5b700);
+  color: #241800;
+  font-weight: 900;
+  font-size: 16px;
+}
+.end-buttons button.secondary { background: rgba(255, 255, 255, 0.1); color: var(--text); }
+
+@media (max-width: 760px) {
+  .lobby { padding: 12px 16px; }
+  .lobby-main { grid-template-columns: 1fr; }
+  .logo { font-size: 26px; }
+  .coins { margin-left: 0; }
 }

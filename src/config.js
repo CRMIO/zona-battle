@@ -1,20 +1,40 @@
 // Tutte le costanti del gioco in un unico posto: per bilanciare basta cambiare qui.
 export const CONFIG = {
-  TILE: 64,          // dimensione di un tile in pixel
-  MAP_W: 70,         // larghezza mappa in tile
-  MAP_H: 70,         // altezza mappa in tile
-  SEED: 1234,        // stesso seed = stessa mappa
+  TILE: 64,            // dimensione di un tile in pixel
+  MAP_W: 130,          // larghezza mappa in tile (8320 px)
+  MAP_H: 130,          // altezza mappa in tile
+  CHUNK: 512,          // il terreno viene disegnato a blocchi di 512 px e messo in cache
 
-  PLAYER_RADIUS: 18,
-  PLAYER_SPEED: 230,   // pixel al secondo
-  SPRINT_MULT: 1.5,
+  BOTS: 24,            // nemici controllati dall'IA
+  ZOOM: 0.85,
+  SNIPER_ZOOM: 0.6,
 
-  FIRE_RATE: 7,        // colpi al secondo
-  SPREAD: 0.05,        // dispersione in radianti
-  BULLET_SPEED: 1100,
-  BULLET_LIFE: 0.7,    // secondi
-  BULLET_DAMAGE: 12,
+  CHAR_RADIUS: 18,
+  WALK_SPEED: 240,     // pixel al secondo
+  SPRINT_MULT: 1.35,
+  HEAL_SLOW: 0.45,     // velocità mentre ci si cura
+  MAX_HP: 100,
+  MAX_SHIELD: 100,
 
-  TARGET_HP: 100,
-  TARGET_RESPAWN: 3,   // secondi
+  START_MATS: 30,
+  MAX_MATS: 500,
+  WALL_COST: 10,
+  WALL_HP: 150,
+  WALL_BUILD_TIME: 0.35,
+  BUILD_RANGE: 230,
+  BUILD_COOLDOWN: 0.22,
+
+  HOUSE_WALL_HP: 300,
+  TREE_HP: 150,
+  ROCK_HP: 220,
+
+  PICKAXE_RATE: 2.2,           // colpi al secondo
+  PICKAXE_DAMAGE: 20,          // danno ai personaggi
+  PICKAXE_STRUCT_DAMAGE: 50,   // danno a muri, alberi e rocce
+
+  INTERACT_RANGE: 64,
+  AUTO_PICKUP_RANGE: 38,
+  CHEST_OPEN_TIME: 0.55,
+
+  WIN_COINS: 100,
 };

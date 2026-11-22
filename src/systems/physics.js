@@ -1,21 +1,31 @@
-// Collisioni: i personaggi sono cerchi, gli ostacoli sono cerchi o rettangoli.
+// Collisioni: i personaggi sono cerchi; gli ostacoli sono cerchi o rettangoli; l'acqua è fatta di tile.
 
-// Sposta un cerchio (entity con x, y, r) e lo spinge fuori dagli ostacoli.
-export function moveCircle(entity, dx, dy, map) {
-  entity.x += dx;
-  entity.y += dy;
+// Sposta un cerchio (entity con x, y, r) e lo spinge fuori da ostacoli e acqua.
+export function moveCircle(e, dx, dy, map) {
+  e.x += dx;
+  e.y += dy;
 
+  const T = map.T;
   // Due passate per gestire bene gli angoli tra più ostacoli
   for (let pass = 0; pass < 2; pass++) {
-    for (const ob of map.query(entity.x, entity.y, entity.r)) {
-      if (ob.shape === 'circle') pushOutOfCircle(entity, ob.x, ob.y, ob.r);
-      else pushOutOfRect(entity, ob);
+    for (const ob of map.queryObstacles(e.x, e.y, e.r)) {
+      if (ob.shape === 'circle') pushOutOfCircle(e, ob.x, ob.y, ob.r);
+      else pushOutOfRect(e, ob);
+    }
+    // Acqua (i ponti costruiti la rendono calpestabile)
+    const c0 = Math.floor((e.x - e.r) / T);
+    const c1 = Math.floor((e.x + e.r) / T);
+    const r0 = Math.floor((e.y - e.r) / T);
+    const r1 = Math.floor((e.y + e.r) / T);
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        if (map.isWaterTile(c, r)) pushOutOfRect(e, { x: c * T, y: r * T, w: T, h: T });
+      }
     }
   }
 
-  // Bordi della mappa
-  entity.x = Math.max(entity.r, Math.min(map.width - entity.r, entity.x));
-  entity.y = Math.max(entity.r, Math.min(map.height - entity.r, entity.y));
+  e.x = Math.max(e.r, Math.min(map.width - e.r, e.x));
+  e.y = Math.max(e.r, Math.min(map.height - e.r, e.y));
 }
 
 function pushOutOfCircle(e, cx, cy, cr) {
@@ -60,12 +70,23 @@ function pushOutOfRect(e, rect) {
   else e.y = rect.y + rect.h + e.r;
 }
 
-// Un punto (o piccolo cerchio di raggio r) tocca l'ostacolo?
+// Un cerchio di raggio r centrato in (x, y) tocca l'ostacolo?
 export function circleHits(ob, x, y, r = 0) {
   if (ob.shape === 'circle') {
-    return Math.hypot(x - ob.x, y - ob.y) < ob.r + r;
+    const dx = x - ob.x;
+    const dy = y - ob.y;
+    const rr = ob.r + r;
+    return dx * dx + dy * dy < rr * rr;
   }
   const nx = Math.max(ob.x, Math.min(x, ob.x + ob.w));
   const ny = Math.max(ob.y, Math.min(y, ob.y + ob.h));
-  return Math.hypot(x - nx, y - ny) < r || (r === 0 && nx === x && ny === y);
+  const dx = x - nx;
+  const dy = y - ny;
+  return dx * dx + dy * dy <= r * r;
+}
+
+// Un ostacolo si sovrappone a un rettangolo?
+export function overlapsRect(ob, rect) {
+  if (ob.shape === 'circle') return circleHits(rect, ob.x, ob.y, ob.r - 0.5);
+  return ob.x < rect.x + rect.w && ob.x + ob.w > rect.x && ob.y < rect.y + rect.h && ob.y + ob.h > rect.y;
 }

@@ -3,14 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Zona Battle – prototipo</title>
+<title>Zona Battle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <canvas id="game"></canvas>
-<div id="help">
-  <b>WASD</b> muoviti · <b>Mouse</b> mira · <b>Click sinistro</b> spara · <b>Shift</b> corri
+
+<div id="lobby" class="screen hidden"></div>
+
+<div id="pause" class="screen overlay hidden">
+  <div class="end-card">
+    <h1>PAUSA</h1>
+    <p>Se abbandoni, la partita conta come persa.</p>
+    <div class="end-buttons">
+      <button data-resume>Riprendi</button>
+      <button data-quit class="secondary">Abbandona partita</button>
+    </div>
+  </div>
 </div>
+
+<div id="end" class="screen overlay hidden"></div>
+
 <script type="module" src="src/main.js"></script>
 </body>
 </html>

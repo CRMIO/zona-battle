@@ -3,43 +3,62 @@ export class Camera {
   constructor() {
     this.x = 0;
     this.y = 0;
-    this.width = 0;   // dimensioni dello schermo in pixel CSS
+    this.width = 0; // dimensioni dello schermo in pixel CSS
     this.height = 0;
+    this.zoom = 1;
+    this.shake = 0;
   }
 
-  follow(target, dt, worldW, worldH) {
-    // Movimento morbido verso il bersaglio
+  get viewW() {
+    return this.width / this.zoom;
+  }
+
+  get viewH() {
+    return this.height / this.zoom;
+  }
+
+  follow(target, dt, worldW, worldH, targetZoom) {
+    this.zoom += (targetZoom - this.zoom) * (1 - Math.exp(-6 * dt));
     const t = 1 - Math.exp(-10 * dt);
     this.x += (target.x - this.x) * t;
     this.y += (target.y - this.y) * t;
 
-    // Non mostrare oltre i bordi della mappa
-    const hw = this.width / 2;
-    const hh = this.height / 2;
-    this.x = worldW > this.width ? clamp(this.x, hw, worldW - hw) : worldW / 2;
-    this.y = worldH > this.height ? clamp(this.y, hh, worldH - hh) : worldH / 2;
+    // Non mostrare troppo oltre i bordi della mappa
+    const hw = this.viewW / 2 - 60;
+    const hh = this.viewH / 2 - 60;
+    if (worldW > this.viewW) this.x = Math.max(hw, Math.min(worldW - hw, this.x));
+    if (worldH > this.viewH) this.y = Math.max(hh, Math.min(worldH - hh, this.y));
+
+    this.shake = Math.max(0, this.shake - dt * 40);
   }
 
   screenToWorld(sx, sy) {
-    return { x: sx - this.width / 2 + this.x, y: sy - this.height / 2 + this.y };
+    return {
+      x: (sx - this.width / 2) / this.zoom + this.x,
+      y: (sy - this.height / 2) / this.zoom + this.y,
+    };
+  }
+
+  worldToScreen(wx, wy) {
+    return {
+      x: (wx - this.x) * this.zoom + this.width / 2,
+      y: (wy - this.y) * this.zoom + this.height / 2,
+    };
   }
 
   // Rettangolo del mondo visibile (con un margine), per disegnare solo ciò che serve
   viewRect(margin = 0) {
-    return {
-      left: this.x - this.width / 2 - margin,
-      top: this.y - this.height / 2 - margin,
-      right: this.x + this.width / 2 + margin,
-      bottom: this.y + this.height / 2 + margin,
-    };
+    const hw = this.viewW / 2 + margin;
+    const hh = this.viewH / 2 + margin;
+    return { left: this.x - hw, top: this.y - hh, right: this.x + hw, bottom: this.y + hh };
   }
 
-  // Applica la trasformazione: da qui in poi si disegna in coordinate del mondo
+  // Da qui in poi si disegna in coordinate del mondo
   apply(ctx) {
-    ctx.translate(Math.round(this.width / 2 - this.x), Math.round(this.height / 2 - this.y));
+    const sx = (Math.random() - 0.5) * this.shake;
+    const sy = (Math.random() - 0.5) * this.shake;
+    ctx.translate(this.width / 2 + sx, this.height / 2 + sy);
+    ctx.scale(this.zoom, this.zoom);
+    ctx.translate(-this.x, -this.y);
   }
-}
-
-function clamp(v, min, max) {
-  return Math.max(min, Math.min(max, v));
 }
