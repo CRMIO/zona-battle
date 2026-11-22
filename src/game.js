@@ -85,7 +85,9 @@ export class Game {
     for (let i = 0; i < CONFIG.BOTS; i++) {
       const s = findSpot();
       const skin = SKINS[Math.floor(this.rng() * SKINS.length)];
-      const bot = new Character(s.x, s.y, names[i % names.length], skin, false);
+      const round = Math.floor(i / names.length);
+      const name = names[i % names.length] + (round ? ' ' + (round + 1) : '');
+      const bot = new Character(s.x, s.y, name, skin, false);
       bot.brain = new BotBrain(bot);
       this.chars.push(bot);
       this.bots.push(bot);
@@ -421,7 +423,7 @@ export class Game {
     for (const o of this.chars) {
       if (o.alive && circleHits(rect, o.x, o.y, o.r - 2)) return false;
     }
-    for (const ch of map.chests) {
+    for (const ch of map.chestGrid.queryRect(rect.x - 30, rect.y - 30, rect.x + rect.w + 30, rect.y + rect.h + 30)) {
       if (circleHits(rect, ch.x, ch.y, 10)) return false;
     }
     if (dryRun) return true;
@@ -450,7 +452,7 @@ export class Game {
   handleInteract(c, held, pressed) {
     let chest = null;
     let bd = CONFIG.INTERACT_RANGE;
-    for (const ch of this.map.chests) {
+    for (const ch of this.map.chestGrid.query(c.x, c.y, CONFIG.INTERACT_RANGE)) {
       if (ch.opened) continue;
       const d = Math.hypot(ch.x - c.x, ch.y - c.y);
       if (d < bd) {
@@ -625,7 +627,7 @@ export class Game {
     this.map.drawShadows(ctx, visible);
     this.map.drawStructures(ctx, visible, this.time);
 
-    for (const ch of this.map.chests) if (inView(ch)) drawChest(ctx, ch, this.time);
+    for (const ch of this.map.chestGrid.queryRect(view.left, view.top, view.right, view.bottom)) drawChest(ctx, ch, this.time);
     for (const p of this.pickups) if (inView(p)) drawPickup(ctx, p, this.time);
 
     for (const c of this.chars) {

@@ -11,7 +11,11 @@ const OUTSIDE = 4;
 
 const POI_NAMES = [
   'Borgo Quieto', 'Pineta Alta', 'Fattoria Vecchia', 'Porto Sabbioso', 'Rocca Grigia',
-  'Valle dei Fiori', 'Mulino Rosso', 'Campo Base', 'Villa Ombrosa',
+  'Valle dei Fiori', 'Mulino Rosso', 'Campo Base', 'Villa Ombrosa', 'Colle Ventoso',
+  'Baia Tranquilla', 'Forte Antico', 'Stazione Nord', 'Cava di Pietra', 'Boschetto Verde',
+  'Piazza Grande', 'Faro Spento', 'Granaio Dorato', 'Vigneto Alto', 'Palude Nebbiosa',
+  'Castelletto', 'Ponte Rotto', 'Rifugio Alpino', 'Mercato Vecchio', 'Torre di Guardia',
+  'Lago Specchio', 'Orto Felice', 'Segheria', 'Capanne Blu', 'Fonte Chiara',
 ];
 const ROOF_COLORS = ['#9c3d2e', '#4f5d75', '#6b4f3a', '#7a6c2f', '#2f6b5e', '#7b3f6b'];
 const FLOOR_COLORS = ['#a47b52', '#8f6a45', '#b08c62', '#9a7a5a'];
@@ -26,6 +30,8 @@ export class GameMap {
     this.width = this.cols * T;
     this.height = this.rows * T;
     this.rng = mulberry32(seed);
+    // quanto è grande la mappa rispetto a quella base 130x130: le quantità di oggetti crescono di conseguenza
+    this.k = (this.cols * this.rows) / (130 * 130);
     this.nA = makeNoise(seed + 11);
     this.nB = makeNoise(seed + 23);
     this.nC = makeNoise(seed + 37);
@@ -34,6 +40,7 @@ export class GameMap {
     this.bridges = new Uint8Array(this.cols * this.rows);
     this.obstacles = new SpatialGrid(128); // muri, rocce, alberi: bloccano movimento e proiettili
     this.bushGrid = new SpatialGrid(128);  // cespugli: nascondono ma non bloccano
+    this.chestGrid = new SpatialGrid(256); // casse: per trovare in fretta quelle vicine
     this.reserved = new SpatialGrid(128);  // spazio già occupato durante la generazione
 
     this.houses = [];
@@ -43,6 +50,7 @@ export class GameMap {
     this.pois = [];
     this.lootSpots = [];
     this.chunks = new Map();
+    this.chunkBudget = 0;
 
     this.makeSprites();
     this.genLakes();
@@ -50,11 +58,11 @@ export class GameMap {
     this.genPois();
     this.genPaths();
     this.genHouses();
-    this.genRocks(260);
-    this.genTrees(700);
-    this.genBushes(380);
+    this.genRocks(Math.round(260 * this.k));
+    this.genTrees(Math.round(700 * this.k));
+    this.genBushes(Math.round(380 * this.k));
     this.genChests();
-    this.genLootSpots(170);
+    this.genLootSpots(Math.round(170 * this.k));
     this.minimap = this.buildMinimap();
   }
 
@@ -68,12 +76,14 @@ export class GameMap {
     for (let i = 0; i < 5; i++) this.oakSprites.push(makeOakSprite(rng, 64));
     for (let i = 0; i < 3; i++) this.pineSprites.push(makePineSprite(rng, 56));
     for (let i = 0; i < 4; i++) this.bushSprites.push(makeBushSprite(rng, 34));
+    this.rockSprites = [];
+    for (let i = 0; i < 12; i++) this.rockSprites.push(makeRockSprite(rng, 30));
   }
 
   genLakes() {
     const rng = this.rng;
     const T = this.T;
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < Math.round(9 * this.k); i++) {
       const R = 4.5 + rng() * 6.5;
       const cx = R + 5 + rng() * (this.cols - 2 * R - 10);
       const cy = R + 5 + rng() * (this.rows - 2 * R - 10);
@@ -193,7 +203,7 @@ export class GameMap {
       }
     }
     let lone = 0;
-    for (let tries = 0; tries < 600 && lone < 16; tries++) {
+    for (let tries = 0; tries < 600 * this.k && lone < 16 * this.k; tries++) {
       const wT = 4 + Math.floor(rng() * 3);
       const hT = 4 + Math.floor(rng() * 2);
       const c = Math.floor(3 + rng() * (this.cols - wT - 6));
@@ -284,7 +294,7 @@ export class GameMap {
       if (code === WATER || code === DIRT) continue;
       if (!this.isFree(x - r - 10, y - r - 10, x + r + 10, y + r + 10)) continue;
       const hp = CONFIG.ROCK_HP * (r / 28);
-      const rock = { kind: 'rock', shape: 'circle', x, y, r, hp, maxHp: hp, shake: 0, sprite: makeRockSprite(rng, r) };
+      const rock = { kind: 'rock', shape: 'circle', x, y, r, hp, maxHp: hp, shake: 0, sprite: this.rockSprites[Math.floor(rng() * this.rockSprites.length)], scale: r / 30 };
       this.obstacles.insert(rock);
       this.reserved.insert({ shape: 'circle', x, y, r: r + 8 });
       placed++;
@@ -351,7 +361,7 @@ export class GameMap {
       }
     }
     let n = 0;
-    for (let tries = 0; tries < 800 && n < 40; tries++) {
+    for (let tries = 0; tries < 800 * this.k && n < 40 * this.k; tries++) {
       if (this.tryChest(100 + rng() * (this.width - 200), 100 + rng() * (this.height - 200))) n++;
     }
   }
@@ -367,6 +377,7 @@ export class GameMap {
   addChest(x, y, luck, force = false) {
     const chest = { shape: 'circle', x, y, r: 20, opened: false, luck, island: force };
     this.chests.push(chest);
+    this.chestGrid.insert(chest);
     this.reserved.insert({ shape: 'circle', x, y, r: 30 });
   }
 
@@ -498,6 +509,7 @@ export class GameMap {
 
   // ================================================================ Disegno
 
+  // Restituisce il blocco di terreno dalla cache, o lo disegna se c'è ancora "budget" in questo frame
   getChunk(cx, cy) {
     const key = cx * 1000 + cy;
     let c = this.chunks.get(key);
@@ -506,9 +518,11 @@ export class GameMap {
       this.chunks.set(key, c);
       return c;
     }
+    if (this.chunkBudget <= 0) return null;
+    this.chunkBudget--;
     c = this.renderChunk(cx, cy);
     this.chunks.set(key, c);
-    if (this.chunks.size > 60) this.chunks.delete(this.chunks.keys().next().value);
+    if (this.chunks.size > 90) this.chunks.delete(this.chunks.keys().next().value);
     return c;
   }
 
@@ -694,12 +708,33 @@ export class GameMap {
     const S = CONFIG.CHUNK;
     const maxC = Math.ceil(this.width / S) - 1;
     const maxR = Math.ceil(this.height / S) - 1;
-    const c0 = Math.max(0, Math.floor(view.left / S));
-    const c1 = Math.min(maxC, Math.floor(view.right / S));
-    const r0 = Math.max(0, Math.floor(view.top / S));
-    const r1 = Math.min(maxR, Math.floor(view.bottom / S));
-    for (let r = r0; r <= r1; r++) {
-      for (let c = c0; c <= c1; c++) ctx.drawImage(this.getChunk(c, r), c * S, r * S, S + 1, S + 1);
+    // al massimo 1 blocco nuovo per frame (all'inizio di più), così correndo non ci sono scatti
+    this.chunkBudget = this.chunks.size === 0 ? 20 : 1;
+    const range = (m) => ({
+      c0: Math.max(0, Math.floor((view.left - m) / S)),
+      c1: Math.min(maxC, Math.floor((view.right + m) / S)),
+      r0: Math.max(0, Math.floor((view.top - m) / S)),
+      r1: Math.min(maxR, Math.floor((view.bottom + m) / S)),
+    });
+    const v = range(0);
+    for (let r = v.r0; r <= v.r1; r++) {
+      for (let c = v.c0; c <= v.c1; c++) {
+        const chunk = this.getChunk(c, r);
+        if (chunk) ctx.drawImage(chunk, c * S, r * S, S + 1, S + 1);
+        else {
+          ctx.fillStyle = '#4f8a3f';
+          ctx.fillRect(c * S, r * S, S + 1, S + 1);
+        }
+      }
+    }
+    // con il budget avanzato prepara i blocchi appena fuori dallo schermo
+    if (this.chunkBudget > 0) {
+      const a = range(S);
+      for (let r = a.r0; r <= a.r1 && this.chunkBudget > 0; r++) {
+        for (let c = a.c0; c <= a.c1 && this.chunkBudget > 0; c++) {
+          if (!this.chunks.has(c * 1000 + r)) this.getChunk(c, r);
+        }
+      }
     }
     ctx.strokeStyle = 'rgba(0,0,0,0.6)';
     ctx.lineWidth = 8;
@@ -793,7 +828,8 @@ export class GameMap {
         ctx.strokeRect(ob.x + 1, ob.y + 1, ob.w - 2, ob.h - 2);
       } else if (ob.kind === 'rock') {
         const s = ob.sprite;
-        ctx.drawImage(s, ob.x - s.width / 2 + sh, ob.y - s.height / 2);
+        const w = s.width * ob.scale;
+        ctx.drawImage(s, ob.x - w / 2 + sh, ob.y - w / 2, w, w);
       } else if (ob.kind === 'wall') {
         drawBuiltWall(ctx, ob);
       } else if (ob.kind === 'tree') {

@@ -1,11 +1,11 @@
 // Tutte le costanti del gioco in un unico posto: per bilanciare basta cambiare qui.
 export const CONFIG = {
   TILE: 64,            // dimensione di un tile in pixel
-  MAP_W: 130,          // larghezza mappa in tile (8320 px)
-  MAP_H: 130,          // altezza mappa in tile
+  MAP_W: 260,          // larghezza mappa in tile (16640 px)
+  MAP_H: 260,          // altezza mappa in tile
   CHUNK: 512,          // il terreno viene disegnato a blocchi di 512 px e messo in cache
 
-  BOTS: 24,            // nemici controllati dall'IA
+  BOTS: 99,            // nemici controllati dall'IA (99 + te = 100 giocatori)
   ZOOM: 0.85,
   SNIPER_ZOOM: 0.6,
 

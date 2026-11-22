@@ -2,10 +2,11 @@ import { lerp, clamp, TAU } from '../utils.js';
 
 // Fasi della tempesta: attesa, poi il cerchio si restringe. dps = danno al secondo fuori dalla zona.
 const PHASES = [
-  { wait: 45, shrink: 40, dps: 1 },
-  { wait: 35, shrink: 30, dps: 2, frac: 0.55 },
-  { wait: 30, shrink: 25, dps: 4, frac: 0.5 },
-  { wait: 25, shrink: 20, dps: 6, frac: 0.45 },
+  { wait: 60, shrink: 60, dps: 1 },
+  { wait: 45, shrink: 45, dps: 1, frac: 0.55 },
+  { wait: 40, shrink: 35, dps: 2, frac: 0.5 },
+  { wait: 30, shrink: 30, dps: 4, frac: 0.5 },
+  { wait: 25, shrink: 22, dps: 6, frac: 0.45 },
   { wait: 20, shrink: 18, dps: 8, frac: 0.4 },
   { wait: 15, shrink: 15, dps: 10, frac: 0 },
 ];
@@ -30,7 +31,7 @@ export class Storm {
     const H = this.map.height;
     const p = PHASES[this.phase];
     const first = this.phase === 0;
-    const r = first ? Math.min(W, H) * 0.36 : this.cur.r * p.frac;
+    const r = first ? Math.min(W, H) * 0.38 : this.cur.r * p.frac;
     const maxOff = first ? Math.min(W, H) * 0.14 : Math.max(0, this.cur.r - r) * 0.85;
     const a = this.rng() * TAU;
     const d = Math.sqrt(this.rng()) * maxOff;
