@@ -1,5 +1,8 @@
 // Lobby: anteprima del personaggio, armadietto (skin possedute) e negozio (skin da comprare).
-import { SKINS, TIER_INFO, getSkin, rankSkinIndex } from '../data/skins.js';
+import { SKINS, TIER_INFO, SKIN_RARITIES, SKIN_RARITY_ORDER, getSkin, rankSkinIndex, rarityRank } from '../data/skins.js';
+import { WEAPONS, RARITIES, RARITY_ORDER } from '../data/weapons.js';
+import { AMMO } from '../data/items.js';
+import { drawWeapon } from '../render/art.js';
 import { drawCharacter } from '../render/art.js';
 import { storeSave, modeKey } from '../save.js';
 import { TIERS, DIVISIONS, RP_PER_DIV, CHAMPION_RP, rankFromRP, nextRankName, rankBadgeSVG, allRanks } from '../data/ranks.js';
@@ -12,6 +15,8 @@ export class Lobby {
     this.tab = 'locker';
     this.preview = save.selected; // skin mostrata in grande (anche da provare nel negozio)
     this.visible = false;
+    this.filter = 'all';
+    this.cardCache = new Map();
     this.build();
   }
 
@@ -50,7 +55,9 @@ export class Lobby {
               <button data-tab="locker">Armadietto</button>
               <button data-tab="shop">Negozio</button>
               <button data-tab="ranks">Rank</button>
+              <button data-tab="weapons">Armi</button>
             </div>
+            <div class="filters" data-filters></div>
             <p class="panel-note" data-note></p>
             <div class="grid" data-grid></div>
           </section>
@@ -175,18 +182,49 @@ export class Lobby {
     }
     grid.classList.remove('ranks');
 
-    const list = this.tab === 'locker' ? SKINS.filter((k) => s.owned.includes(k.id)) : SKINS.filter((k) => !s.owned.includes(k.id));
+    const filters = this.root.querySelector('[data-filters]');
+    if (this.tab === 'weapons') {
+      filters.innerHTML = '';
+      this.renderWeapons(grid);
+      return;
+    }
+    grid.classList.remove('weapons');
+
+    // Filtro per rarità
+    const opts = [['all', 'Tutte', '#9fb0c2'], ...SKIN_RARITY_ORDER.map((r) => [r, SKIN_RARITIES[r].name, SKIN_RARITIES[r].color])];
+    if (this.tab === 'shop') opts.push(['rank', 'Premi rank', TIER_INFO.rank.color]);
+    else opts.splice(1, 0, ['free', 'Gratis', TIER_INFO.free.color]), opts.push(['rank', 'Premi rank', TIER_INFO.rank.color]);
+    if (!opts.some((o) => o[0] === this.filter)) this.filter = 'all';
+    filters.innerHTML = '';
+    for (const [id, label, color] of opts) {
+      const b = document.createElement('button');
+      b.className = 'chip' + (this.filter === id ? ' active' : '');
+      b.style.setProperty('--c', color);
+      b.textContent = label;
+      b.addEventListener('click', () => {
+        this.filter = id;
+        this.render();
+      });
+      filters.appendChild(b);
+    }
+
+    const all = this.tab === 'locker' ? SKINS.filter((k) => s.owned.includes(k.id)) : SKINS.filter((k) => !s.owned.includes(k.id));
+    const list = all
+      .filter((k) => this.filter === 'all' || k.tier === this.filter)
+      .sort((a, b) => rarityRank(a) - rarityRank(b) || a.name.localeCompare(b.name, 'it'));
+    const ownedCount = SKINS.filter((k) => s.owned.includes(k.id)).length;
     this.root.querySelector('[data-note]').textContent =
       this.tab === 'locker'
-        ? 'Scegli la skin da usare in partita.'
-        : list.length
-          ? 'Skin base 1000 monete · Skin premium 3000 monete. Clicca per provarle.'
+        ? `Hai ${ownedCount} skin su ${SKINS.length}. Scegli quella da usare in partita.`
+        : all.length
+          ? `${all.length} skin da sbloccare · ` + SKIN_RARITY_ORDER.map((r) => `${SKIN_RARITIES[r].name} ${SKIN_RARITIES[r].price}`).join(' · ') + ' monete'
           : 'Hai già tutte le skin. Complimenti!';
 
     grid.innerHTML = '';
     for (const k of list) {
       const card = document.createElement('button');
       card.className = `card tier-${k.tier}` + (k.id === this.preview ? ' active' : '') + (k.id === s.selected ? ' selected' : '');
+      card.style.setProperty('--c', TIER_INFO[k.tier].color);
       const cv = document.createElement('canvas');
       cv.width = cv.height = 120;
       card.appendChild(cv);
@@ -194,6 +232,10 @@ export class Lobby {
       name.className = 'card-name';
       name.textContent = k.name;
       card.appendChild(name);
+      const rar = document.createElement('div');
+      rar.className = 'card-rarity';
+      rar.textContent = TIER_INFO[k.tier].name;
+      card.appendChild(rar);
       const foot = document.createElement('div');
       foot.className = 'card-foot';
       if (this.tab === 'shop' && k.tier === 'rank') {
@@ -215,6 +257,43 @@ export class Lobby {
       });
       grid.appendChild(card);
       this.drawCard(cv, k);
+    }
+  }
+
+  // Scheda Armi: ogni arma in tutte e 5 le rarità, con il danno
+  renderWeapons(grid) {
+    grid.classList.add('weapons');
+    this.root.querySelector('[data-note]').textContent =
+      'Le armi si trovano nelle casse e per terra. Più la rarità è alta, più fanno danno: le casse rare sulle isole danno spesso armi epiche e leggendarie.';
+    grid.innerHTML = '';
+    for (const id in WEAPONS) {
+      const w = WEAPONS[id];
+      const row = document.createElement('div');
+      row.className = 'weapon-row';
+      row.innerHTML = `<div class="weapon-info"><b>${w.name}</b>
+        <span>${w.pellets > 1 ? w.pellets + ' pallini · ' : ''}${w.fireRate} colpi/s · caricatore ${w.mag}</span>
+        <span>${AMMO[w.ammo].name} · ${w.auto ? 'automatica' : 'colpo singolo'}</span></div>`;
+      for (const r of RARITY_ORDER) {
+        const R = RARITIES[r];
+        const cell = document.createElement('div');
+        cell.className = 'weapon-cell';
+        cell.style.setProperty('--c', R.color);
+        const cv = document.createElement('canvas');
+        cv.width = 160;
+        cv.height = 64;
+        const ctx = cv.getContext('2d');
+        const len = { pistol: 24, smg: 40, rifle: 58, shotgun: 54, sniper: 75 }[id];
+        ctx.translate(80, 34);
+        ctx.scale(1.7, 1.7);
+        drawWeapon(ctx, id, r, -len / 2 + (id === 'pistol' ? 2 : 10), 0);
+        cell.appendChild(cv);
+        const dmg = Math.round(w.damage * R.mult);
+        const lab = document.createElement('div');
+        lab.innerHTML = `<b>${R.name}</b><span>${w.pellets > 1 ? `${dmg}×${w.pellets}` : dmg} danno</span>`;
+        cell.appendChild(lab);
+        row.appendChild(cell);
+      }
+      grid.appendChild(row);
     }
   }
 
@@ -283,14 +362,19 @@ export class Lobby {
     });
   }
 
+  // Le anteprime delle carte si disegnano una volta sola e poi si copiano (sono più di 200)
   drawCard(cv, skin) {
-    const ctx = cv.getContext('2d');
-    ctx.clearRect(0, 0, cv.width, cv.height);
-    ctx.save();
-    ctx.translate(60, 62);
-    ctx.scale(2, 2);
-    drawCharacter(ctx, skin, { angle: -Math.PI / 2, item: { kind: 'weapon', id: 'rifle', rarity: 'rare' }, t: 0 });
-    ctx.restore();
+    let img = this.cardCache.get(skin.id);
+    if (!img) {
+      img = document.createElement('canvas');
+      img.width = img.height = 120;
+      const c = img.getContext('2d');
+      c.translate(60, 62);
+      c.scale(2, 2);
+      drawCharacter(c, skin, { angle: -Math.PI / 2, item: { kind: 'weapon', id: 'rifle', rarity: 'rare' }, t: 0 });
+      this.cardCache.set(skin.id, img);
+    }
+    cv.getContext('2d').drawImage(img, 0, 0);
   }
 
   drawPreview(t) {

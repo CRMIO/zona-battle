@@ -6,7 +6,6 @@ import { ITEMS, AMMO } from '../data/items.js';
 import { TAU } from '../utils.js';
 
 const METAL = '#2b2f35';
-const METAL2 = '#474e57';
 const WOOD = '#7a4b28';
 
 function rr(ctx, x, y, w, h, r) {
@@ -42,9 +41,15 @@ export function shade(hex, amt) {
 // ------------------------------------------------------------------ Armi
 
 export function drawWeapon(ctx, id, rarity, x0 = 0, y0 = 0) {
-  const acc = (RARITIES[rarity] || RARITIES.common).color;
+  const R = RARITIES[rarity] || RARITIES.common;
+  const acc = R.color;
+  const METAL2 = R.body; // il corpo dell'arma ha il colore della rarità
   ctx.save();
   ctx.translate(x0, y0);
+  if (R.glow) {
+    ctx.shadowColor = R.glow;
+    ctx.shadowBlur = 8;
+  }
   ctx.lineWidth = 1;
   ctx.strokeStyle = 'rgba(0,0,0,0.6)';
   const part = (x, y, w, h, color, r = 1.5) => {
@@ -241,6 +246,18 @@ function drawPattern(ctx, s, r, t) {
         ctx.fill();
       }
       ctx.restore();
+      break;
+    }
+    case 'rainbow': {
+      // leggendaria: colori che scorrono
+      for (let i = 0; i < 6; i++) {
+        ctx.fillStyle = `hsl(${(t * 60 + i * 60) % 360}, 85%, 60%)`;
+        ctx.fillRect(-r + i * ((r * 2) / 6), -r, (r * 2) / 6 + 0.5, r * 2);
+      }
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = s.body;
+      ctx.fillRect(-r, -r, r * 2, r * 2);
+      ctx.globalAlpha = 1;
       break;
     }
     case 'armor':

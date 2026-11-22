@@ -1,11 +1,12 @@
 // Definizioni delle armi: sono solo dati, il codice che spara è in game.js.
 
+// body = colore del corpo dell'arma, glow = alone (solo epiche e leggendarie), mult = moltiplicatore del danno
 export const RARITIES = {
-  common: { name: 'Comune', color: '#a7adb4', mult: 1.0 },
-  uncommon: { name: 'Non comune', color: '#5fcf5a', mult: 1.07 },
-  rare: { name: 'Raro', color: '#3f9cff', mult: 1.14 },
-  epic: { name: 'Epico', color: '#b45cff', mult: 1.22 },
-  legendary: { name: 'Leggendario', color: '#ffa928', mult: 1.3 },
+  common: { name: 'Comune', color: '#a7adb4', body: '#5d636b', mult: 1.0 },
+  uncommon: { name: 'Non comune', color: '#5fcf5a', body: '#3f7d43', mult: 1.08 },
+  rare: { name: 'Rara', color: '#3f9cff', body: '#2f5fae', mult: 1.16 },
+  epic: { name: 'Epica', color: '#b45cff', body: '#6b3aae', glow: '#c77dff', mult: 1.25 },
+  legendary: { name: 'Leggendaria', color: '#ffa928', body: '#b8860b', glow: '#ffcf4d', mult: 1.35 },
 };
 
 export const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
