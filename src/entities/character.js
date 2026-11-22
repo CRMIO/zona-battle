@@ -11,7 +11,7 @@ export function emptyIntent() {
   return {
     mx: 0, my: 0, aim: 0, sprint: false,
     fire: false, firePressed: false, reload: false,
-    slot: null, build: null,
+    slot: null, build: null, edit: null,
     interact: false, interactPressed: false,
   };
 }
@@ -46,6 +46,7 @@ export class Character {
     this.swingT = 0;
     this.swingAnim = 0;
     this.buildCd = 0;
+    this.editCd = 0;
     this.channel = null; // { kind: 'heal' | 'open', t, total, ... }
     this.hurtT = 0;
     this.showBarT = 0;
@@ -169,7 +170,12 @@ export class Character {
     }
 
     // --- Costruire ---
-    if (it.build && this.buildCd <= 0) game.tryBuild(this, it.build.x, it.build.y);
+    if (it.build && this.buildCd <= 0) game.buildPiece(this, it.build.piece || 'wall', it.build.x, it.build.y);
+    this.editCd -= dt;
+    if (it.edit && this.editCd <= 0) {
+      game.tryEdit(this, it.edit.x, it.edit.y);
+      this.editCd = 0.2;
+    }
 
     game.handleInteract(this, it.interact, it.interactPressed);
   }

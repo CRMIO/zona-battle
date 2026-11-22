@@ -15,9 +15,11 @@ import { angleDiff, clamp, gauss } from '../utils.js';
 const PROBES = [0, 0.4, -0.4, 0.8, -0.8, 1.2, -1.2, 1.7, -1.7, 2.3, -2.3, Math.PI];
 
 export class BotBrain {
-  constructor(me) {
+  constructor(me, skillRange = [0.5, 0.85]) {
     this.me = me;
-    this.skill = 0.3 + Math.random() * 0.55; // 0 = scarso, 1 = fortissimo
+    // 0 = scarso, 1 = fortissimo (nelle classificate dipende dal tuo rank)
+    this.skill = skillRange[0] + Math.random() * (skillRange[1] - skillRange[0]);
+    this.editCd = 0;
     this.state = 'loot';
     this.thinkT = Math.random() * 0.3;
     this.enemy = null;
@@ -61,6 +63,7 @@ export class BotBrain {
     it.interactPressed = false;
     it.sprint = false;
     it.aim = me.angle;
+    it.edit = null;
     this.wantMove = false;
 
     this.thinkT -= dt;
@@ -68,6 +71,7 @@ export class BotBrain {
     this.strafeT -= dt;
     this.aimErrT -= dt;
     this.coverCd -= dt;
+    this.editCd -= dt;
     this.unstuckT -= dt;
     this.steerT -= dt;
     this.targetT += dt;
@@ -84,6 +88,7 @@ export class BotBrain {
     else if (this.state === 'storm') this.goStorm(game);
     else this.loot(game);
 
+    if (!game.mode.build) this.buildQueue.length = 0;
     if (this.buildQueue.length && me.buildCd <= 0 && me.mats >= CONFIG.WALL_COST && !it.build) {
       it.build = this.buildQueue.shift();
     }
@@ -97,7 +102,7 @@ export class BotBrain {
     this.enemy = this.findEnemy(g);
     if (this.enemy !== this.prevEnemy) {
       // tempo di reazione: i bot bravi reagiscono prima
-      this.reactT = 0.3 + (1 - this.skill) * 0.6;
+      this.reactT = 0.12 + (1 - this.skill) * 0.45;
       this.prevEnemy = this.enemy;
     }
     const e = this.enemy;
@@ -138,11 +143,13 @@ export class BotBrain {
       if (c === me || !c.alive) continue;
       const d = Math.hypot(c.x - me.x, c.y - me.y);
       // chi è nascosto in un cespuglio e non spara si vede solo da vicino
-      const range = g.map.inBush(c.x, c.y) && g.time - c.lastShot > 1.2 ? 160 : 720;
-      if (d > range || d >= bd) continue;
+      const range = g.map.inBush(c.x, c.y) && g.time - c.lastShot > 1.2 ? 160 : 800;
+      // il giocatore vero è un bersaglio preferito
+      const score = c.isPlayer ? d * 0.75 : d;
+      if (d > range || score >= bd) continue;
       if (g.map.lineBlocked(me.x, me.y, c.x, c.y)) continue;
       best = c;
-      bd = d;
+      bd = score;
     }
     // ricorda chi gli ha sparato
     if (!best && me.lastHitBy && me.lastHitBy !== 'storm' && me.lastHitBy.alive && g.time - me.lastHitTime < 3) {
@@ -236,7 +243,7 @@ export class BotBrain {
       if (chest.opened || this.blacklist.has(chest)) continue;
       const d = Math.hypot(chest.x - me.x, chest.y - me.y);
       if (d > 2200) continue;
-      if (chest.island && me.mats < 90) continue; // servono materiali per il ponte
+      if (chest.island && (!g.mode.build || me.mats < 90)) continue; // servono materiali per il ponte
       let s = d * (chest.luck > 0 ? 0.75 : 1);
       if (!g.storm.contains(chest.x, chest.y, 50)) s *= 3;
       consider('chest', chest, s);
@@ -310,14 +317,23 @@ export class BotBrain {
         it.fire = true;
         it.firePressed = me.fireCd <= 0;
       }
-    } else if (blocker.kind !== 'wall') {
+    } else if (blocker.kind === 'wall' && blocker.owner === me.id) {
+      // dietro il proprio muro: lo trasforma in finestra e spara attraverso
+      const wx = blocker.x + blocker.w / 2;
+      const wy = blocker.y + blocker.h / 2;
+      if (this.editCd <= 0 && Math.hypot(wx - me.x, wy - me.y) < 140 && blocker.build >= 1) {
+        it.edit = { x: wx, y: wy };
+        this.editCd = 1.5;
+      }
+    } else {
       this.steer(g, Math.atan2(dy, dx) + this.strafe * 0.6);
     }
 
     // Copertura: se lo colpiscono costruisce un muro verso il nemico
     if (g.time - me.lastHitTime < 0.5 && this.coverCd <= 0 && me.mats >= CONFIG.WALL_COST && Math.random() < 0.4 + this.skill * 0.4) {
       const a = Math.atan2(dy, dx);
-      this.buildQueue.push({ x: me.x + Math.cos(a) * 70, y: me.y + Math.sin(a) * 70 });
+      const piece = me.mats >= 30 && Math.random() < this.skill ? 'barrier' : 'wall';
+      this.buildQueue.push({ piece, x: me.x + Math.cos(a) * 70, y: me.y + Math.sin(a) * 70 });
       this.coverCd = 3 + Math.random() * 3;
     }
   }
@@ -368,10 +384,10 @@ export class BotBrain {
     if (e && this.coverCd <= 0 && me.mats >= CONFIG.WALL_COST * 2) {
       const d = Math.hypot(e.x - me.x, e.y - me.y);
       if (d < 650) {
+        // si chiude in un bunker (o almeno dietro una barriera)
         const a = Math.atan2(e.y - me.y, e.x - me.x);
-        for (const off of [0, 0.9, -0.9]) {
-          this.buildQueue.push({ x: me.x + Math.cos(a + off) * 70, y: me.y + Math.sin(a + off) * 70 });
-        }
+        const piece = me.mats >= 50 ? 'bunker' : 'barrier';
+        this.buildQueue.push({ piece, x: me.x + Math.cos(a) * 70, y: me.y + Math.sin(a) * 70 });
         this.coverCd = 7;
       }
     }
@@ -409,7 +425,7 @@ export class BotBrain {
     if (!t || this.isGone(t)) {
       this.target = null;
       // pochi materiali: abbatti un albero o una roccia
-      if (me.mats < 60) {
+      if (g.mode.build && me.mats < 60) {
         const ob = this.nearestHarvest(g);
         if (ob) {
           this.smash = { ob, t: 7, harvest: true };
@@ -509,7 +525,7 @@ export class BotBrain {
     const a = Math.atan2(y - me.y, x - me.x);
     it.aim = a;
     // acqua davanti: costruisci un ponte
-    if (allowBridge && me.mats >= CONFIG.WALL_COST) {
+    if (allowBridge && g.mode.build && me.mats >= CONFIG.WALL_COST) {
       const px = me.x + Math.cos(a) * 50;
       const py = me.y + Math.sin(a) * 50;
       if (g.map.isWaterAt(px, py)) {

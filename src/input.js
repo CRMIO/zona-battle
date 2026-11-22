@@ -1,4 +1,4 @@
-// Stato della tastiera e del mouse, letto dal game loop a ogni frame.
+// Stato di tastiera, mouse e comandi touch, letto dal game loop a ogni frame.
 // "pressed" vale solo per il frame in cui il tasto è stato premuto.
 export class Input {
   constructor(canvas) {
@@ -6,6 +6,16 @@ export class Input {
     this.pressed = new Set();
     this.mouse = { x: innerWidth / 2, y: innerHeight / 2, down: false, pressed: false };
     this.wheel = 0;
+    this.onTap = null; // tocco sul canvas (per la barra degli oggetti sul telefono)
+
+    // Stato dei comandi touch (lo scrive ui/touch.js)
+    this.touch = {
+      enabled: false,
+      mx: 0, my: 0,            // joystick movimento
+      aiming: false, aimAngle: 0, // joystick mira
+      fire: false, firePressed: false,
+      slot: null,
+    };
 
     window.addEventListener('keydown', (e) => {
       if (!e.repeat) this.pressed.add(e.code);
@@ -18,18 +28,24 @@ export class Input {
       this.mouse.down = false;
     });
 
-    window.addEventListener('mousemove', (e) => {
+    // Il mouse vero: i tocchi sullo schermo sono gestiti a parte
+    window.addEventListener('pointermove', (e) => {
+      if (e.pointerType !== 'mouse') return;
       this.mouse.x = e.clientX;
       this.mouse.y = e.clientY;
     });
-    canvas.addEventListener('mousedown', (e) => {
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'mouse') {
+        if (this.onTap) this.onTap(e.clientX, e.clientY);
+        return;
+      }
       if (e.button === 0) {
         this.mouse.down = true;
         this.mouse.pressed = true;
       }
     });
-    window.addEventListener('mouseup', (e) => {
-      if (e.button === 0) this.mouse.down = false;
+    window.addEventListener('pointerup', (e) => {
+      if (e.pointerType === 'mouse' && e.button === 0) this.mouse.down = false;
     });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     canvas.addEventListener(
@@ -54,5 +70,7 @@ export class Input {
     this.pressed.clear();
     this.mouse.pressed = false;
     this.wheel = 0;
+    this.touch.firePressed = false;
+    this.touch.slot = null;
   }
 }

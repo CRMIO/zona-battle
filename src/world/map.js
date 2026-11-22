@@ -40,6 +40,7 @@ export class GameMap {
     this.bridges = new Uint8Array(this.cols * this.rows);
     this.obstacles = new SpatialGrid(128); // muri, rocce, alberi: bloccano movimento e proiettili
     this.bushGrid = new SpatialGrid(128);  // cespugli: nascondono ma non bloccano
+    this.doors = new SpatialGrid(128);     // muri modificati in porta: non bloccano niente
     this.chestGrid = new SpatialGrid(256); // casse: per trovare in fretta quelle vicine
     this.reserved = new SpatialGrid(128);  // spazio già occupato durante la generazione
 
@@ -467,10 +468,47 @@ export class GameMap {
       const px = lerp(x1, x2, i / n);
       const py = lerp(y1, y2, i / n);
       for (const ob of this.obstacles.query(px, py, 1)) {
-        if (circleHits(ob, px, py, 1)) return ob;
+        if (!ob.window && circleHits(ob, px, py, 1)) return ob;
       }
     }
     return null;
+  }
+
+  // Zero Costruzioni: un ponte già pronto dalla riva più vicina a ogni isola
+  buildIslandBridges() {
+    for (const isl of this.islands) {
+      let best = null;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const tiles = [];
+        let c = Math.floor(isl.c);
+        let r = Math.floor(isl.r);
+        let seen = false;
+        for (let i = 0; i < 40; i++) {
+          c += dx;
+          r += dy;
+          const t = this.tile(c, r);
+          if (t === WATER) {
+            seen = true;
+            tiles.push([c, r]);
+          } else if (seen) break;
+          if (t === OUTSIDE) break;
+        }
+        if (seen && (!best || tiles.length < best.length)) best = tiles;
+      }
+      if (best) for (const [c, r] of best) this.bridges[r * this.cols + c] = 1;
+    }
+  }
+
+  drawDoors(ctx, view) {
+    for (const d of this.doors.queryRect(view.left, view.top, view.right, view.bottom)) {
+      ctx.strokeStyle = '#7a4f28';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(d.x + 4, d.y + 4, d.w - 8, d.h - 8);
+      ctx.fillStyle = 'rgba(181,125,70,0.25)';
+      ctx.fillRect(d.x + 7, d.y + 7, d.w - 14, d.h - 14);
+      ctx.fillStyle = '#5c3a1e';
+      for (const [x, y] of [[d.x, d.y], [d.x + d.w - 10, d.y], [d.x, d.y + d.h - 10], [d.x + d.w - 10, d.y + d.h - 10]]) ctx.fillRect(x, y, 10, 10);
+    }
   }
 
   houseAt(x, y) {

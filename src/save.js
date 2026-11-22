@@ -1,4 +1,4 @@
-// Salvataggio di monete, skin e statistiche nel browser (localStorage).
+// Salvataggio di monete, skin, rank e statistiche nel browser (localStorage).
 // Se il browser blocca il salvataggio, il gioco funziona lo stesso ma non ricorda i progressi.
 
 const KEY = 'zonaBattle.save.v1';
@@ -10,6 +10,8 @@ const DEFAULT = {
   wins: 0,
   matches: 0,
   kills: 0,
+  rp: { build: 0, zero: 0 },           // punti rank per modalità (con costruzioni / zero costruzioni)
+  mode: { build: true, ranked: false }, // ultima modalità scelta nella lobby
 };
 
 export function loadSave() {
@@ -21,6 +23,8 @@ export function loadSave() {
         ...DEFAULT,
         ...data,
         owned: Array.from(new Set([...DEFAULT.owned, ...(data.owned || [])])),
+        rp: { ...DEFAULT.rp, ...(data.rp || {}) },
+        mode: { ...DEFAULT.mode, ...(data.mode || {}) },
       };
     }
   } catch (e) {
@@ -35,4 +39,12 @@ export function storeSave(save) {
   } catch (e) {
     // salvataggio non disponibile (es. navigazione privata)
   }
+}
+
+export function modeKey(mode) {
+  return mode.build ? 'build' : 'zero';
+}
+
+export function modeName(mode) {
+  return `${mode.ranked ? 'Classificata' : 'Non classificata'} · ${mode.build ? 'Costruzioni' : 'Zero Costruzioni'}`;
 }

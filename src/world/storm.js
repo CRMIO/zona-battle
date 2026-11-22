@@ -1,15 +1,19 @@
 import { lerp, clamp, TAU } from '../utils.js';
 
-// Fasi della tempesta: attesa, poi il cerchio si restringe. dps = danno al secondo fuori dalla zona.
-const PHASES = [
-  { wait: 60, shrink: 60, dps: 1 },
-  { wait: 45, shrink: 45, dps: 1, frac: 0.55 },
-  { wait: 40, shrink: 35, dps: 2, frac: 0.5 },
-  { wait: 30, shrink: 30, dps: 4, frac: 0.5 },
-  { wait: 25, shrink: 22, dps: 6, frac: 0.45 },
-  { wait: 20, shrink: 18, dps: 8, frac: 0.4 },
-  { wait: 15, shrink: 15, dps: 10, frac: 0 },
+// Le "safe": 9 zone sempre più piccole. A ogni zona il danno della tempesta aumenta.
+// wait = attesa prima di restringersi, shrink = durata del restringimento, dps = danno al secondo fuori.
+export const PHASES = [
+  { wait: 55, shrink: 55, dps: 1 },
+  { wait: 45, shrink: 45, dps: 2, frac: 0.6 },
+  { wait: 40, shrink: 38, dps: 3, frac: 0.55 },
+  { wait: 35, shrink: 32, dps: 4, frac: 0.55 },
+  { wait: 30, shrink: 28, dps: 6, frac: 0.5 },
+  { wait: 25, shrink: 24, dps: 8, frac: 0.5 },
+  { wait: 20, shrink: 20, dps: 10, frac: 0.45 },
+  { wait: 18, shrink: 16, dps: 12, frac: 0.4 },
+  { wait: 15, shrink: 14, dps: 15, frac: 0 },
 ];
+export const FINAL_DPS = 20;
 
 export class Storm {
   constructor(map, rng) {
@@ -68,7 +72,7 @@ export class Storm {
       if (this.phase >= PHASES.length) {
         this.state = 'final';
         this.to = null;
-        this.dps = 12;
+        this.dps = FINAL_DPS;
       } else {
         this.state = 'wait';
         this.timer = PHASES[this.phase].wait;

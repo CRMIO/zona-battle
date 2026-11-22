@@ -113,7 +113,7 @@ button { font: inherit; cursor: pointer; }
   text-align: center;
   gap: 8px;
 }
-.preview { width: 100%; max-width: 360px; height: auto; aspect-ratio: 1; }
+.preview { width: 100%; max-width: min(320px, 34vh); height: auto; aspect-ratio: 1; }
 .skin-name { font-family: var(--display); font-size: 26px; }
 .skin-tier {
   padding: 3px 12px;
@@ -144,13 +144,13 @@ button { font: inherit; cursor: pointer; }
   margin-top: 6px;
   width: 100%;
   max-width: 320px;
-  padding: 16px;
+  padding: 12px;
   border: 0;
   border-radius: 12px;
   background: linear-gradient(#ffe066, #f5b700);
   color: #241800;
   font-family: var(--display);
-  font-size: 30px;
+  font-size: 28px;
   box-shadow: 0 6px 0 #a67800, 0 12px 30px rgba(245, 183, 0, 0.35);
   transition: transform 0.08s;
 }
@@ -266,4 +266,115 @@ button { font: inherit; cursor: pointer; }
   .lobby-main { grid-template-columns: 1fr; }
   .logo { font-size: 26px; }
   .coins { margin-left: 0; }
+}
+
+/* ---------------------------------------------------------------- Modalità e rank (lobby) */
+.modes { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.seg { display: flex; padding: 3px; gap: 3px; border-radius: 10px; background: rgba(0, 0, 0, 0.35); border: 1px solid var(--line); }
+.seg button {
+  flex: 1; padding: 8px 6px; border: 0; border-radius: 7px; background: transparent;
+  color: var(--muted); font-weight: 800; font-size: 14px;
+}
+.seg button.active { background: var(--blue); color: #fff; }
+.seg[data-seg="ranked"] button.active[data-v="1"] { background: linear-gradient(#ffd34d, #e09b00); color: #241800; }
+.rankbox { min-height: 40px; }
+.rank-off { margin: 4px 0 0; font-size: 12.5px; color: var(--muted); }
+.rank-row { display: flex; align-items: center; gap: 12px; text-align: left; }
+.rank-info { flex: 1; }
+.rank-name { font-family: var(--display); font-size: 20px; }
+.rank-bar { height: 8px; border-radius: 99px; background: rgba(255, 255, 255, 0.12); overflow: hidden; margin: 4px 0; }
+.rank-bar i { display: block; height: 100%; }
+.rank-sub { font-size: 12.5px; color: var(--muted); }
+.rank-badge { flex: none; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.5)); }
+
+.grid.ranks { display: flex; flex-direction: column; gap: 6px; }
+.tier-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); }
+.tier-name { width: 92px; flex: none; font-family: var(--display); font-size: 15px; }
+.tier-cell { display: flex; flex-direction: column; align-items: center; font-size: 11px; color: var(--muted); padding: 2px 4px; border-radius: 8px; border: 2px solid transparent; }
+.tier-cell.mine { border-color: #fff; background: rgba(255, 255, 255, 0.1); color: #fff; }
+
+/* ---------------------------------------------------------------- Fine partita: rank */
+.mode-label { font-size: 13px; }
+.end-rank { display: flex; align-items: center; gap: 14px; justify-content: center; text-align: left; margin: 12px 0 4px; padding: 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); }
+.rp-delta { font-size: 20px; font-weight: 900; }
+.rp-delta.pos { color: #5fdc8f; }
+.rp-delta.neg { color: #ff6b6b; }
+.rp-delta small { font-size: 13px; color: var(--muted); font-weight: 600; }
+.rp-detail { font-size: 12px; color: var(--muted); }
+.promo { font-family: var(--display); font-size: 18px; }
+.end-card p.promo.up { color: #ffd34d; }
+.end-card p.promo.down { color: #ff8a6b; }
+
+/* ---------------------------------------------------------------- Comandi touch */
+#touch { position: fixed; inset: 0; z-index: 5; pointer-events: none; user-select: none; -webkit-user-select: none; }
+#touch * { touch-action: none; -webkit-tap-highlight-color: transparent; }
+.t-zone { position: absolute; bottom: 0; pointer-events: auto; }
+.t-left { left: 0; width: 42vw; height: 62vh; }
+.t-right { right: 0; width: 26vw; height: 46vh; }
+.t-base {
+  position: absolute; width: 124px; height: 124px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+}
+.t-left .t-base { left: 120px; top: calc(100% - 110px); }
+.t-right .t-base { left: calc(100% - 100px); top: calc(100% - 100px); }
+.t-base.active { background: rgba(255, 255, 255, 0.18); }
+.t-knob {
+  position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55); border: 2px solid rgba(255, 255, 255, 0.85);
+  transform: translate(-50%, -50%);
+}
+.t-right .t-knob { background: rgba(255, 90, 74, 0.6); }
+.t-buttons {
+  position: absolute; right: calc(26vw + 4px); bottom: 14px; width: 196px;
+  display: flex; flex-wrap: wrap-reverse; justify-content: flex-end; gap: 6px; pointer-events: none;
+}
+.t-btn {
+  pointer-events: auto; width: 60px; height: 34px; padding: 0 4px; border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.45); background: rgba(10, 14, 22, 0.55);
+  color: #fff; font-weight: 900; font-size: 10px; letter-spacing: 0.2px;
+}
+.t-btn:active { background: rgba(255, 255, 255, 0.3); }
+.t-fire { width: 64px; height: 64px; border-radius: 50%; background: rgba(220, 50, 40, 0.6); font-size: 12px; }
+.t-build { border-color: rgba(120, 190, 255, 0.7); }
+#touch.no-build .t-build { display: none; }
+.t-top { position: absolute; top: 48px; left: 12px; display: flex; gap: 6px; pointer-events: auto; }
+.t-small { height: 32px; min-width: 44px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.4); background: rgba(10, 14, 22, 0.6); color: #fff; font-weight: 800; font-size: 12px; }
+
+#rotate { display: none; }
+@media (orientation: portrait) {
+  body.touch.in-game #rotate {
+    display: flex; position: fixed; inset: 0; z-index: 90; flex-direction: column; align-items: center; justify-content: center;
+    background: #0a0f18; color: #fff; text-align: center; padding: 24px; font-weight: 800;
+  }
+  #rotate div { font-size: 64px; }
+}
+body.touch #game { touch-action: none; }
+
+body.touch .controls { display: none; }
+
+/* Schermi bassi (telefono in orizzontale): lobby compatta, GIOCA sempre visibile */
+@media (max-height: 520px) {
+  .lobby { padding: 8px 12px; gap: 8px; }
+  .logo { font-size: 22px; }
+  .stats { font-size: 12px; gap: 10px; }
+  .coins { font-size: 16px; padding: 4px 12px; }
+  .lobby-main { grid-template-columns: 290px 1fr; gap: 12px; }
+  .preview { max-width: 96px; }
+  .stage { gap: 4px; }
+  .skin-name { font-size: 17px; }
+  .stage-action { min-height: 0; }
+  .play { font-size: 22px; padding: 8px; }
+  .hint { display: none; }
+  .skin-tier, .stage-action:empty { display: none; }
+  .lobby-main { padding-bottom: 56px; }
+  .play { position: fixed; left: 12px; bottom: 8px; width: 290px; z-index: 12; }
+  .seg button { padding: 6px 4px; font-size: 12px; }
+  .rank-name { font-size: 16px; }
+  .rankbox .rank-off { display: none; }
+  .panel { padding: 10px; }
+  .tabs button { padding: 7px; font-size: 14px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+  .card canvas { width: 76px; height: 76px; }
+  .card-name { font-size: 12px; }
 }

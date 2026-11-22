@@ -14,6 +14,14 @@ import { chestLoot, floorLoot, itemLabel } from './systems/loot.js';
 import { circleHits, overlapsRect } from './systems/physics.js';
 import { drawCharacter, drawChest, drawPickup, pickupColor } from './render/art.js';
 import { Hud } from './ui/hud.js';
+import { botSkillRange } from './data/ranks.js';
+
+// Pezzi da costruire: muro singolo, barriera (3 muri in fila), bunker (8 muri attorno a te)
+export const PIECES = {
+  wall: { name: 'Muro', key: 'Z' },
+  barrier: { name: 'Barriera', key: 'X' },
+  bunker: { name: 'Bunker', key: 'C' },
+};
 
 const BOT_NAMES = [
   'Lupo', 'Falco', 'Zanzara', 'Tornado', 'Pixel', 'Ninja', 'Bomber', 'Cometa', 'Volpe', 'Razzo',
@@ -22,13 +30,17 @@ const BOT_NAMES = [
 ];
 
 export class Game {
-  constructor({ ctx, input, skinId, onEnd }) {
+  constructor({ ctx, input, skinId, onEnd, mode, rankRP = 0 }) {
     this.ctx = ctx;
+    this.mode = mode || { build: true, ranked: false };
+    this.skillRange = botSkillRange(this.mode.ranked, rankRP);
     this.input = input;
     this.onEnd = onEnd;
     const seed = (Math.random() * 1e9) | 0;
     this.rng = mulberry32(seed ^ 0x5bd1e995);
     this.map = new GameMap(seed);
+    // In Zero Costruzioni non si può costruire: le isole hanno già un ponte
+    if (!this.mode.build) this.map.buildIslandBridges();
     this.storm = new Storm(this.map, this.rng);
     this.camera = new Camera();
     this.camera.zoom = CONFIG.ZOOM;
@@ -88,7 +100,7 @@ export class Game {
       const round = Math.floor(i / names.length);
       const name = names[i % names.length] + (round ? ' ' + (round + 1) : '');
       const bot = new Character(s.x, s.y, name, skin, false);
-      bot.brain = new BotBrain(bot);
+      bot.brain = new BotBrain(bot, this.skillRange);
       this.chars.push(bot);
       this.bots.push(bot);
     }
@@ -158,7 +170,9 @@ export class Game {
     }
 
     const w = this.player.alive ? this.player.weapon : null;
-    const zoom = w && w.id === 'sniper' ? CONFIG.SNIPER_ZOOM : CONFIG.ZOOM;
+    // sugli schermi piccoli (telefono) la visuale si allarga un po'
+    const screen = Math.max(0.55, Math.min(1, Math.min(this.camera.width, this.camera.height) / 720));
+    const zoom = (w && w.id === 'sniper' ? CONFIG.SNIPER_ZOOM : CONFIG.ZOOM) * screen;
     this.camera.follow(this.player, dt, this.map.width, this.map.height, zoom);
   }
 
@@ -356,6 +370,7 @@ export class Game {
       kills: this.player.kills,
       killer: killer === 'storm' ? 'la tempesta' : killer ? killer.name : null,
       coins: win ? CONFIG.WIN_COINS : 0,
+      mode: this.mode,
     };
     if (win) this.flashMessage('VITTORIA!', '#ffd34d', 5);
     if (immediate) this.onEnd(this.result);
@@ -405,7 +420,7 @@ export class Game {
     const cx = (col + 0.5) * T;
     const cy = (row + 0.5) * T;
     if (Math.hypot(cx - c.x, cy - c.y) > CONFIG.BUILD_RANGE) return false;
-    if (c.mats < CONFIG.WALL_COST) return false;
+    if (c.mats < CONFIG.WALL_COST || !this.mode.build) return false;
 
     const idx = row * map.cols + col;
     if (map.tile(col, row) === WATER) {
@@ -423,6 +438,9 @@ export class Game {
     for (const o of this.chars) {
       if (o.alive && circleHits(rect, o.x, o.y, o.r - 2)) return false;
     }
+    for (const d of map.doors.queryRect(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h)) {
+      if (overlapsRect(d, rect)) return false;
+    }
     for (const ch of map.chestGrid.queryRect(rect.x - 30, rect.y - 30, rect.x + rect.w + 30, rect.y + rect.h + 30)) {
       if (circleHits(rect, ch.x, ch.y, 10)) return false;
     }
@@ -435,6 +453,80 @@ export class Game {
     map.addObstacle(wall);
     this.growingWalls.push(wall);
     this.afterBuild(c, cx, cy);
+    return true;
+  }
+
+  // Le celle occupate da un pezzo. (tx, ty) = punto mirato, angle = direzione dello sguardo.
+  pieceCells(c, piece, tx, ty, angle) {
+    const T = this.map.T;
+    if (piece === 'bunker') {
+      const pc = Math.floor(c.x / T);
+      const pr = Math.floor(c.y / T);
+      const out = [];
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) out.push([pc + dx, pr + dy]);
+      return out;
+    }
+    const col = Math.floor(tx / T);
+    const row = Math.floor(ty / T);
+    if (piece === 'barrier') {
+      // la barriera è perpendicolare a dove guardi
+      return Math.abs(Math.cos(angle)) > Math.abs(Math.sin(angle))
+        ? [[col, row - 1], [col, row], [col, row + 1]]
+        : [[col - 1, row], [col, row], [col + 1, row]];
+    }
+    return [[col, row]];
+  }
+
+  buildPiece(c, piece, tx, ty) {
+    if (!this.mode.build) return 0;
+    const T = this.map.T;
+    let placed = 0;
+    if (piece === 'bunker') {
+      // centra il personaggio nella sua cella, così il bunker si chiude su tutti i lati
+      c.x = (Math.floor(c.x / T) + 0.5) * T;
+      c.y = (Math.floor(c.y / T) + 0.5) * T;
+    }
+    for (const [col, row] of this.pieceCells(c, piece, tx, ty, c.angle)) {
+      if (c.mats < CONFIG.WALL_COST) break;
+      // solo il muro singolo diventa ponte sull'acqua
+      if (piece !== 'wall' && this.map.tile(col, row) === WATER) continue;
+      if (this.tryBuild(c, (col + 0.5) * T, (row + 0.5) * T)) placed++;
+    }
+    if (placed) c.buildCd = CONFIG.BUILD_COOLDOWN * (piece === 'wall' ? 1 : 2.5);
+    return placed;
+  }
+
+  // Modifica una tua struttura: muro → finestra (ci spari attraverso) → porta (ci passi) → muro
+  tryEdit(c, x, y) {
+    if (!this.mode.build) return false;
+    const map = this.map;
+    const T = map.T;
+    const col = Math.floor(x / T);
+    const row = Math.floor(y / T);
+    const cx = (col + 0.5) * T;
+    const cy = (row + 0.5) * T;
+    if (Math.hypot(cx - c.x, cy - c.y) > CONFIG.BUILD_RANGE) return false;
+    const same = (o) => o.kind === 'wall' && o.x === col * T && o.y === row * T;
+    const wall = map.obstacles.query(cx, cy, 1).find(same) || map.doors.query(cx, cy, 1).find(same);
+    if (!wall || wall.owner !== c.id || wall.build < 1) {
+      if (c === this.player) this.flashMessage('Puoi modificare solo le tue strutture', '#ff8a6b', 1.2);
+      return false;
+    }
+    if (wall.door) {
+      const rect = { shape: 'rect', x: wall.x, y: wall.y, w: T, h: T };
+      if (this.chars.some((o) => o.alive && circleHits(rect, o.x, o.y, o.r - 2))) return false;
+      map.doors.remove(wall);
+      wall.door = false;
+      map.addObstacle(wall);
+    } else if (wall.window) {
+      wall.window = false;
+      wall.door = true;
+      map.obstacles.remove(wall);
+      map.doors.insert(wall);
+    } else {
+      wall.window = true;
+    }
+    this.spark(cx, cy, '#cfe8ff', 6);
     return true;
   }
 
@@ -501,6 +593,7 @@ export class Game {
   }
 
   dropItems(x, y, list, spread) {
+    if (!this.mode.build) list = list.filter((d) => d.kind !== 'mats');
     list.forEach((data, i) => {
       const a = (i / Math.max(1, list.length)) * TAU + Math.random() * 0.8;
       const sp = spread * (3 + Math.random() * 3);
@@ -626,6 +719,7 @@ export class Game {
     this.map.drawWater(ctx, view, this.time);
     this.map.drawShadows(ctx, visible);
     this.map.drawStructures(ctx, visible, this.time);
+    this.map.drawDoors(ctx, view);
 
     for (const ch of this.map.chestGrid.queryRect(view.left, view.top, view.right, view.bottom)) drawChest(ctx, ch, this.time);
     for (const p of this.pickups) if (inView(p)) drawPickup(ctx, p, this.time);
@@ -679,23 +773,40 @@ export class Game {
 
     this.storm.draw(ctx, view, this.time);
 
-    // Anteprima del muro in modalità costruzione
+    // Anteprima del pezzo in modalità costruzione
     const pc = this.playerCtl;
     if (pc.buildMode && pc.ghost && this.player.alive) {
       const T = this.map.T;
-      const g = pc.ghost;
-      const water = this.map.tile(g.col, g.row) === WATER;
-      ctx.fillStyle = g.valid ? 'rgba(90,170,255,0.35)' : 'rgba(255,70,70,0.3)';
-      ctx.strokeStyle = g.valid ? '#7cc4ff' : '#ff6b6b';
       ctx.lineWidth = 3;
       ctx.setLineDash([8, 6]);
-      ctx.fillRect(g.col * T, g.row * T, T, T);
-      ctx.strokeRect(g.col * T + 1.5, g.row * T + 1.5, T - 3, T - 3);
-      ctx.setLineDash([]);
-      ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 12px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(water ? 'PONTE' : 'MURO', g.x, g.y + 4);
+      for (const g of pc.ghost.cells) {
+        ctx.fillStyle = g.valid ? 'rgba(90,170,255,0.35)' : 'rgba(255,70,70,0.25)';
+        ctx.strokeStyle = g.valid ? '#7cc4ff' : '#ff6b6b';
+        ctx.fillRect(g.col * T, g.row * T, T, T);
+        ctx.strokeRect(g.col * T + 1.5, g.row * T + 1.5, T - 3, T - 3);
+      }
+      ctx.setLineDash([]);
+      const first = pc.ghost.cells[pc.ghost.piece === 'bunker' ? 1 : Math.floor(pc.ghost.cells.length / 2)];
+      if (first) {
+        const water = pc.ghost.piece === 'wall' && this.map.tile(first.col, first.row) === WATER;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(water ? 'PONTE' : PIECES[pc.ghost.piece].name.toUpperCase(), (first.col + 0.5) * T, (first.row + 0.5) * T + 4);
+      }
+    }
+
+    // Sul telefono: linea di mira
+    if (this.input.touch.enabled && this.player.alive && !pc.buildMode && this.player.weapon) {
+      const p = this.player;
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 8]);
+      ctx.beginPath();
+      ctx.moveTo(p.x + Math.cos(p.angle) * 40, p.y + Math.sin(p.angle) * 40);
+      ctx.lineTo(p.x + Math.cos(p.angle) * 260, p.y + Math.sin(p.angle) * 260);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
     ctx.restore();
 

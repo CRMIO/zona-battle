@@ -5,6 +5,9 @@ import { ITEMS, AMMO } from '../data/items.js';
 import { drawItemIcon, pickupColor } from '../render/art.js';
 import { itemLabel } from '../systems/loot.js';
 import { TAU } from '../utils.js';
+import { PHASES } from '../world/storm.js';
+import { PIECES } from '../game.js';
+import { modeName } from '../save.js';
 
 const FONT = 'system-ui, "Segoe UI", Arial, sans-serif';
 
@@ -43,30 +46,50 @@ export class Hud {
     const p = g.player;
     const W = g.camera.width;
     const H = g.camera.height;
+    const touch = g.input.touch.enabled;
+    this.touch = touch;
+    this.slotRects = [];
 
     this.vignettes(ctx, W, H);
-    this.drawKillFeed(ctx, 16, 16);
-    const mm = Math.min(190, Math.max(130, W * 0.16));
-    this.drawMap(ctx, W - 16 - mm, 16, mm, false);
-    this.drawInfo(ctx, W - 16, 16 + mm + 24);
+    const mm = touch ? Math.min(120, H * 0.3) : Math.min(190, Math.max(130, W * 0.16));
+    this.drawMap(ctx, W - 12 - mm, 12, mm, false);
+    this.drawInfo(ctx, W - 12, 12 + mm + 20);
 
     if (p.alive) {
-      this.drawBars(ctx, 16, H - 16);
-      this.drawHotbar(ctx, W / 2, H - 16);
-      this.drawResources(ctx, W - 16, H - 16);
-      this.drawPrompt(ctx, W / 2, H - 150);
+      if (touch) {
+        this.drawBars(ctx, 12, 40, 150);
+        this.drawKillFeed(ctx, 12, 92);
+        this.drawHotbar(ctx, W / 2, 58, 42);
+        this.drawPrompt(ctx, W / 2, H - 16);
+      } else {
+        this.drawKillFeed(ctx, 16, 16);
+        this.drawBars(ctx, 16, H - 16, 250);
+        this.drawHotbar(ctx, W / 2, H - 16, 56);
+        this.drawResources(ctx, W - 16, H - 16);
+        this.drawPrompt(ctx, W / 2, H - 150);
+      }
       this.drawChannel(ctx, W / 2, H / 2 + 70);
-      if (g.playerCtl.buildMode) this.drawBuildBanner(ctx, W / 2, 30);
+      if (g.playerCtl.buildMode) this.drawBuildBanner(ctx, W / 2, touch ? 118 : 30);
+    } else {
+      this.drawKillFeed(ctx, 16, 16);
     }
     this.drawMessage(ctx, W / 2, H * 0.26);
     if (g.showBigMap) {
-      const size = Math.min(W, H) - 120;
+      const size = Math.min(W, H) - (touch ? 40 : 120);
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
       ctx.fillRect(0, 0, W, H);
       this.drawMap(ctx, (W - size) / 2, (H - size) / 2, size, true);
-      text(ctx, 'Premi M per chiudere la mappa', W / 2, (H + size) / 2 + 28, { align: 'center', size: 14 });
+      if (!touch) text(ctx, 'Premi M per chiudere la mappa', W / 2, (H + size) / 2 + 28, { align: 'center', size: 14 });
     }
-    if (p.alive && !g.showBigMap && !g.over) this.drawCrosshair(ctx);
+    if (p.alive && !g.showBigMap && !g.over && !touch) this.drawCrosshair(ctx);
+  }
+
+  // Sul telefono: quale slot della barra è stato toccato (-1 = piccone)
+  hitSlot(x, y) {
+    for (const r of this.slotRects || []) {
+      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return r.slot;
+    }
+    return null;
   }
 
   vignettes(ctx, W, H) {
@@ -93,18 +116,18 @@ export class Hud {
     text(ctx, label, x + w - 6, y + h - 3, { align: 'right', size: h - 2, weight: 800 });
   }
 
-  drawBars(ctx, x, yBottom) {
+  drawBars(ctx, x, yBottom, w) {
     const p = this.game.player;
-    const w = 250;
-    this.bar(ctx, x, yBottom - 20, w, 20, p.hp / CONFIG.MAX_HP, '#4fcf55', Math.ceil(p.hp));
-    this.bar(ctx, x, yBottom - 46, w, 14, p.shield / CONFIG.MAX_SHIELD, '#3fa9ff', Math.ceil(p.shield));
-    text(ctx, 'VITA', x, yBottom - 52, { size: 11, color: '#cfd8e0', weight: 800 });
+    const hh = this.touch ? 14 : 20;
+    const sh = this.touch ? 10 : 14;
+    this.bar(ctx, x, yBottom - hh, w, hh, p.hp / CONFIG.MAX_HP, '#4fcf55', Math.ceil(p.hp));
+    this.bar(ctx, x, yBottom - hh - sh - 6, w, sh, p.shield / CONFIG.MAX_SHIELD, '#3fa9ff', Math.ceil(p.shield));
+    if (!this.touch) text(ctx, 'VITA', x, yBottom - hh - sh - 12, { size: 11, color: '#cfd8e0', weight: 800 });
   }
 
-  drawHotbar(ctx, cx, yBottom) {
+  drawHotbar(ctx, cx, yBottom, box) {
     const p = this.game.player;
-    const box = 56;
-    const gap = 6;
+    const gap = box > 50 ? 6 : 5;
     const total = 6 * box + 5 * gap;
     const x0 = cx - total / 2;
     const y0 = yBottom - box;
@@ -116,6 +139,7 @@ export class Hud {
       const sel = p.active === slot;
       const x = x0 + i * (box + gap);
       const y = y0 - (sel ? 8 : 0);
+      this.slotRects.push({ x, y: y0 - 8, w: box, h: box + 8, slot });
       const color = item && item.kind !== 'pickaxe' ? pickupColor(item) : '#6b7480';
       const grad = ctx.createLinearGradient(0, y, 0, y + box);
       grad.addColorStop(0, item ? color + 'cc' : 'rgba(20,24,30,0.6)');
@@ -132,12 +156,12 @@ export class Hud {
       if (item) {
         ctx.save();
         ctx.translate(x + box / 2, y + box / 2 + 2);
-        drawItemIcon(ctx, item, 42);
+        drawItemIcon(ctx, item, box * 0.75);
         ctx.restore();
         if (item.kind === 'weapon') text(ctx, String(item.mag), x + box - 5, y + box - 5, { align: 'right', size: 13, weight: 800 });
         if (item.kind === 'item') text(ctx, 'x' + item.count, x + box - 5, y + box - 5, { align: 'right', size: 13, weight: 800 });
       }
-      text(ctx, keys[i], x + 5, y + 14, { size: 11, color: '#e6eef5', weight: 800 });
+      if (!this.touch) text(ctx, keys[i], x + 5, y + 14, { size: 11, color: '#e6eef5', weight: 800 });
     }
 
     // Nome e munizioni dell'oggetto in mano
@@ -149,24 +173,27 @@ export class Hud {
       label = `${w.name}  ${cur.mag} / ${p.ammo[w.ammo]}`;
       color = RARITIES[cur.rarity].color;
     } else if (cur && cur.kind === 'item') {
-      label = `${ITEMS[cur.id].name} x${cur.count}  ·  click per usare`;
+      label = `${ITEMS[cur.id].name} x${cur.count}  ·  ${this.touch ? 'SPARA' : 'click'} per usare`;
       color = ITEMS[cur.id].color;
     }
-    text(ctx, label, cx, y0 - 18, { align: 'center', size: 15, color, weight: 800 });
+    // sul telefono la barra è in alto: le scritte vanno sotto
+    const ly = this.touch ? y0 + box + 18 : y0 - 18;
+    text(ctx, label, cx, ly, { align: 'center', size: this.touch ? 13 : 15, color, weight: 800 });
     if (p.reloadT > 0) {
       const w = 160;
       const k = 1 - p.reloadT / p.reloadTotal;
-      panel(ctx, cx - w / 2, y0 - 46, w, 8, 4, 'rgba(0,0,0,0.6)');
+      const ry = this.touch ? ly + 8 : y0 - 46;
+      panel(ctx, cx - w / 2, ry, w, 8, 4, 'rgba(0,0,0,0.6)');
       ctx.fillStyle = '#ffd34d';
-      ctx.fillRect(cx - w / 2, y0 - 46, w * k, 8);
-      text(ctx, 'Ricarica...', cx, y0 - 52, { align: 'center', size: 12 });
+      ctx.fillRect(cx - w / 2, ry, w * k, 8);
+      text(ctx, 'Ricarica...', cx, this.touch ? ry + 22 : y0 - 52, { align: 'center', size: 12 });
     }
   }
 
   drawResources(ctx, xRight, yBottom) {
     const p = this.game.player;
     const lines = [
-      { data: { kind: 'mats' }, label: `${p.mats}`, color: '#f0c890' },
+      ...(this.game.mode.build ? [{ data: { kind: 'mats' }, label: `${p.mats}`, color: '#f0c890' }] : []),
       ...Object.keys(AMMO).map((id) => ({ data: { kind: 'ammo', id }, label: `${p.ammo[id]}`, color: AMMO[id].color, name: AMMO[id].short })),
     ];
     const h = 24;
@@ -267,22 +294,28 @@ export class Hud {
 
   drawInfo(ctx, xRight, y) {
     const g = this.game;
-    text(ctx, `Vivi: ${g.aliveCount}    Eliminazioni: ${g.player.kills}`, xRight, y, { align: 'right', size: 15, weight: 800 });
+    const sz = this.touch ? 12 : 15;
+    text(ctx, `Vivi: ${g.aliveCount}    Eliminazioni: ${g.player.kills}`, xRight, y, { align: 'right', size: sz, weight: 800 });
     const st = g.storm;
+    const zone = Math.min(st.phase + 1, PHASES.length);
     let t;
     let color = '#e6eef5';
-    if (st.state === 'wait') t = `La tempesta si restringe tra ${fmt(st.timer)}`;
+    if (st.state === 'wait') t = `Zona ${zone}/${PHASES.length} · si restringe tra ${fmt(st.timer)}`;
     else if (st.state === 'shrink') {
-      t = `La tempesta avanza! ${fmt(st.timer)}`;
+      t = `Zona ${zone}/${PHASES.length} · la tempesta avanza! ${fmt(st.timer)}`;
       color = '#d8a6ff';
     } else {
       t = 'Zona finale!';
       color = '#d8a6ff';
     }
-    text(ctx, t, xRight, y + 22, { align: 'right', size: 13, color });
+    text(ctx, t, xRight, y + sz + 6, { align: 'right', size: sz - 2, color });
+    text(ctx, `Danno tempesta: ${st.dps}/s`, xRight, y + (sz + 6) * 2 - 2, { align: 'right', size: sz - 2, color: '#d8a6ff' });
+    let yy = y + (sz + 6) * 3 - 4;
     if (g.player.alive && !st.contains(g.player.x, g.player.y)) {
-      text(ctx, `Sei nella tempesta! (-${st.dps}/s)`, xRight, y + 42, { align: 'right', size: 13, color: '#ff8a8a', weight: 800 });
+      text(ctx, 'Sei nella tempesta!', xRight, yy, { align: 'right', size: sz - 2, color: '#ff8a8a', weight: 800 });
+      yy += sz + 4;
     }
+    if (!this.touch) text(ctx, modeName(g.mode), xRight, yy, { align: 'right', size: 12, color: g.mode.ranked ? '#ffd34d' : '#9fb0c2' });
   }
 
   drawKillFeed(ctx, x, y) {
@@ -311,6 +344,7 @@ export class Hud {
       }
     }
     if (!label) return;
+    if (this.touch) label = label.replace('[E] Tieni premuto per aprire', 'Tieni premuto USA per aprire').replace('[E] ', 'USA: ');
     ctx.font = `700 15px ${FONT}`;
     const w = ctx.measureText(label).width + 28;
     panel(ctx, cx - w / 2, y - 20, w, 30, 6, 'rgba(0,0,0,0.65)');
@@ -330,12 +364,24 @@ export class Hud {
   }
 
   drawBuildBanner(ctx, cx, y) {
-    const p = this.game.player;
-    const label = `MODALITÀ COSTRUZIONE · click: muro (sull'acqua: ponte) · costo ${CONFIG.WALL_COST} · materiali ${p.mats} · [Q] esci`;
+    const g = this.game;
+    const p = g.player;
+    const cur = g.playerCtl.piece;
+    const parts = Object.entries(PIECES).map(([id, pc]) => ({ id, label: this.touch ? pc.name : `[${pc.key}] ${pc.name}` }));
+    const tail = this.touch ? `MOD: modifica · mat ${p.mats}` : `[G] Modifica · materiali ${p.mats} · [Q] esci`;
     ctx.font = `800 14px ${FONT}`;
-    const w = ctx.measureText(label).width + 28;
-    panel(ctx, cx - w / 2, y - 18, w, 28, 6, 'rgba(30,90,160,0.75)');
-    text(ctx, label, cx, y + 1, { align: 'center', size: 14, weight: 800, stroke: false });
+    const widths = parts.map((q) => ctx.measureText(q.label).width + 18);
+    const tailW = ctx.measureText(tail).width + 20;
+    const total = widths.reduce((a, b) => a + b, 0) + tailW + 20;
+    let x = cx - total / 2;
+    panel(ctx, x, y - 18, total, 28, 6, 'rgba(30,90,160,0.8)');
+    x += 10;
+    parts.forEach((q, i) => {
+      if (q.id === cur) panel(ctx, x - 2, y - 15, widths[i] - 4, 22, 4, 'rgba(255,211,77,0.9)');
+      text(ctx, q.label, x + widths[i] / 2 - 3, y + 1, { align: 'center', size: 14, weight: 800, stroke: false, color: q.id === cur ? '#241800' : '#fff' });
+      x += widths[i];
+    });
+    text(ctx, tail, x + tailW / 2, y + 1, { align: 'center', size: 13, weight: 700, stroke: false });
   }
 
   drawMessage(ctx, cx, y) {

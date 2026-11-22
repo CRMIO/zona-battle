@@ -717,6 +717,21 @@ export function drawBuiltWall(ctx, w) {
   ctx.lineWidth = 4;
   ctx.strokeRect(-h, -h, h * 2, h * 2);
 
+  if (w.window) {
+    // finestra: buco con vetro al centro
+    const g = h * 0.55;
+    ctx.fillStyle = 'rgba(160,215,255,0.55)';
+    ctx.fillRect(-g, -g, g * 2, g * 2);
+    ctx.strokeStyle = '#5c3a1e';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(-g, -g, g * 2, g * 2);
+    ctx.beginPath();
+    ctx.moveTo(-g, 0); ctx.lineTo(g, 0);
+    ctx.moveTo(0, -g); ctx.lineTo(0, g);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillRect(-g + 4, -g + 4, g * 0.5, 3);
+  }
   const dmg = 1 - w.hp / w.maxHp;
   if (k >= 1 && dmg > 0.05) {
     ctx.fillStyle = `rgba(0,0,0,${dmg * 0.4})`;

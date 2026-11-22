@@ -1,7 +1,8 @@
 // Lobby: anteprima del personaggio, armadietto (skin possedute) e negozio (skin da comprare).
 import { SKINS, TIER_INFO, getSkin } from '../data/skins.js';
 import { drawCharacter } from '../render/art.js';
-import { storeSave } from '../save.js';
+import { storeSave, modeKey } from '../save.js';
+import { TIERS, DIVISIONS, RP_PER_DIV, CHAMPION_RP, rankFromRP, nextRankName, rankBadgeSVG, allRanks } from '../data/ranks.js';
 
 export class Lobby {
   constructor(root, save, onPlay) {
@@ -32,13 +33,23 @@ export class Lobby {
             <div class="skin-name" data-name></div>
             <div class="skin-tier" data-tier></div>
             <div class="stage-action" data-action></div>
+            <div class="modes">
+              <div class="seg" data-seg="build">
+                <button data-v="1">Costruzioni</button><button data-v="0">Zero Costruzioni</button>
+              </div>
+              <div class="seg" data-seg="ranked">
+                <button data-v="0">Non classificata</button><button data-v="1">Classificata</button>
+              </div>
+              <div class="rankbox" data-rankbox></div>
+            </div>
             <button class="play" data-play>GIOCA</button>
-            <p class="hint">Sii l'ultimo sopravvissuto: ogni vittoria vale <b>100 monete</b>.</p>
+            <p class="hint">Sii l'ultimo dei 100: ogni vittoria vale <b>100 monete</b>.</p>
           </section>
           <section class="panel">
             <div class="tabs">
               <button data-tab="locker">Armadietto</button>
               <button data-tab="shop">Negozio</button>
+              <button data-tab="ranks">Rank</button>
             </div>
             <p class="panel-note" data-note></p>
             <div class="grid" data-grid></div>
@@ -47,13 +58,23 @@ export class Lobby {
         <footer class="controls">
           <span><b>WASD</b> muoviti</span><span><b>Shift</b> corri</span><span><b>Mouse</b> mira</span>
           <span><b>Click</b> spara / usa</span><span><b>R</b> ricarica</span><span><b>F</b> piccone</span>
-          <span><b>1–5</b> inventario</span><span><b>Q</b> costruisci</span><span><b>E</b> apri / raccogli</span>
+          <span><b>1–5</b> inventario</span><span><b>Q</b> costruisci</span><span><b>Z X C</b> muro / barriera / bunker</span>
+          <span><b>G</b> modifica</span><span><b>E</b> apri / raccogli</span>
           <span><b>M</b> mappa</span><span><b>Esc</b> pausa</span>
         </footer>
         <div class="toast" data-toast></div>
       </div>`;
     this.canvas = this.root.querySelector('.preview');
     this.root.querySelector('[data-play]').addEventListener('click', () => this.onPlay());
+    for (const seg of this.root.querySelectorAll('[data-seg]')) {
+      for (const b of seg.querySelectorAll('button')) {
+        b.addEventListener('click', () => {
+          this.save.mode[seg.dataset.seg] = b.dataset.v === '1';
+          storeSave(this.save);
+          this.render();
+        });
+      }
+    }
     this.root.querySelectorAll('[data-tab]').forEach((b) =>
       b.addEventListener('click', () => {
         this.tab = b.dataset.tab;
@@ -143,6 +164,14 @@ export class Lobby {
       action.innerHTML = '<div class="equipped">✓ Equipaggiata</div>';
     }
 
+    this.renderModes();
+    const grid = this.root.querySelector('[data-grid]');
+    if (this.tab === 'ranks') {
+      this.renderRanks(grid);
+      return;
+    }
+    grid.classList.remove('ranks');
+
     const list = this.tab === 'locker' ? SKINS.filter((k) => s.owned.includes(k.id)) : SKINS.filter((k) => !s.owned.includes(k.id));
     this.root.querySelector('[data-note]').textContent =
       this.tab === 'locker'
@@ -151,7 +180,6 @@ export class Lobby {
           ? 'Skin base 1000 monete · Skin premium 3000 monete. Clicca per provarle.'
           : 'Hai già tutte le skin. Complimenti!';
 
-    const grid = this.root.querySelector('[data-grid]');
     grid.innerHTML = '';
     for (const k of list) {
       const card = document.createElement('button');
@@ -182,6 +210,50 @@ export class Lobby {
       grid.appendChild(card);
       this.drawCard(cv, k);
     }
+  }
+
+  renderModes() {
+    const m = this.save.mode;
+    for (const seg of this.root.querySelectorAll('[data-seg]')) {
+      for (const b of seg.querySelectorAll('button')) b.classList.toggle('active', (b.dataset.v === '1') === m[seg.dataset.seg]);
+    }
+    const box = this.root.querySelector('[data-rankbox]');
+    if (!m.ranked) {
+      box.innerHTML = '<p class="rank-off">Partita libera: niente punti rank da vincere o perdere.</p>';
+      return;
+    }
+    const rp = this.save.rp[modeKey(m)];
+    const r = rankFromRP(rp);
+    const next = nextRankName(r);
+    box.innerHTML = `
+      <div class="rank-row">${rankBadgeSVG(r, 58)}
+        <div class="rank-info">
+          <div class="rank-name" style="color:${r.tier.light}">${r.name}</div>
+          <div class="rank-bar"><i style="width:${Math.round(r.progress * 100)}%;background:${r.tier.color}"></i></div>
+          <div class="rank-sub">${rp} RP · ${next ? `${r.nextAt - rp} RP per ${next}` : 'Rank massimo!'}</div>
+        </div>
+      </div>
+      <p class="rank-off">Nelle classificate i bot diventano più forti man mano che sali di rank.</p>`;
+  }
+
+  renderRanks(grid) {
+    grid.classList.add('ranks');
+    const key = modeKey(this.save.mode);
+    const mine = rankFromRP(this.save.rp[key]);
+    const best = (k) => rankFromRP(this.save.rp[k]).name;
+    this.root.querySelector('[data-note]').innerHTML =
+      `Il tuo rank: <b>${best('build')}</b> con costruzioni · <b>${best('zero')}</b> in Zero Costruzioni. ` +
+      `Vittoria +70 RP, top 5 +45, top 10 +32, top 25 +20, top 50 +10, ogni eliminazione fino a +10; entrare in partita costa di più ai rank alti.`;
+    grid.innerHTML = '';
+    const ranks = allRanks();
+    TIERS.forEach((tier, ti) => {
+      const row = document.createElement('div');
+      row.className = 'tier-row';
+      const list = ranks.filter((r) => r.tierIndex === ti);
+      row.innerHTML = `<div class="tier-name" style="color:${tier.light}">${tier.name}</div>` +
+        list.map((r) => `<div class="tier-cell ${r.index === mine.index ? 'mine' : ''}" title="${r.name} · da ${r.floor} RP">${rankBadgeSVG(r, 46)}<span>${r.floor}</span></div>`).join('');
+      grid.appendChild(row);
+    });
   }
 
   drawCard(cv, skin) {

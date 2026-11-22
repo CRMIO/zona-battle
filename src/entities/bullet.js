@@ -50,6 +50,7 @@ export class Bullet {
         }
       }
       for (const ob of game.map.queryObstacles(this.x, this.y, 1)) {
+        if (ob.window) continue; // le finestre lasciano passare i proiettili
         if (circleHits(ob, this.x, this.y, 1)) {
           if (ob.kind === 'wall' || ob.kind === 'hwall') game.damageObstacle(ob, this.damage, null);
           game.spark(this.x, this.y, ob.kind === 'rock' ? '#c9ccd0' : '#e0b070', 5);
