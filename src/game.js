@@ -896,6 +896,24 @@ export class Game {
     this.map.drawOverlay(ctx, view, visible, this.player, dt, this.time);
     this.drawSky(ctx, inView);
 
+    // Mira automatica (telefono): mirino rosso sul nemico agganciato
+    const lock = this.input.touch.enabled && this.player.alive ? this.playerCtl.lockTarget : null;
+    if (lock && lock.alive) {
+      const r = 30 + Math.sin(this.time * 8) * 3;
+      ctx.save();
+      ctx.translate(lock.x, lock.y);
+      ctx.rotate(this.time * 1.5);
+      ctx.strokeStyle = '#ff4a3d';
+      ctx.lineWidth = 4;
+      for (let i = 0; i < 4; i++) {
+        ctx.rotate(Math.PI / 2);
+        ctx.beginPath();
+        ctx.arc(0, 0, r, -0.45, 0.45);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     // Barre vita dei nemici colpiti di recente (sopra tetti e alberi)
     for (const c of this.chars) {
       if (!c.alive || c === this.player || c.showBarT <= 0 || !inView(c)) continue;

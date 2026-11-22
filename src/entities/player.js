@@ -65,12 +65,16 @@ export class PlayerController {
     // --- Mira: mouse, oppure joystick destro
     let target;
     if (touch.enabled) {
+      // Mira automatica: se c'è un nemico a tiro il personaggio lo aggancia e lo segue da solo.
+      // Trascinando il pulsante di fuoco si mira a mano.
+      this.lockTarget = touch.aiming || this.buildMode ? null : this.trackEnemy(game);
       if (touch.aiming) this.touchAim = touch.aimAngle;
-      else if (touch.fire && !this.buildMode) {
-        // pulsante di fuoco premuto senza trascinarlo: mira da solo al nemico più vicino
-        const e = this.nearestEnemy(game);
-        if (e) this.touchAim = Math.atan2(e.y - me.y, e.x - me.x);
-        else if (it.mx || it.my) this.touchAim = Math.atan2(it.my, it.mx);
+      else if (this.lockTarget) {
+        const e = this.lockTarget;
+        const w = me.weapon;
+        const d = Math.hypot(e.x - me.x, e.y - me.y);
+        const lead = w ? Math.min(0.5, d / w.speed) : 0; // anticipa il movimento del nemico
+        this.touchAim = Math.atan2(e.y + e.vy * lead - me.y, e.x + e.vx * lead - me.x);
       } else if (it.mx || it.my) this.touchAim = Math.atan2(it.my, it.mx);
       it.aim = this.touchAim === null ? me.angle : this.touchAim;
       target = { x: me.x + Math.cos(it.aim) * 100, y: me.y + Math.sin(it.aim) * 100 };
@@ -125,9 +129,20 @@ export class PlayerController {
     if (input.wasPressed('KeyM')) game.showBigMap = !game.showBigMap;
   }
 
-  nearestEnemy(game) {
+  // Il bersaglio della mira automatica: resta su quello già agganciato finché è visibile e a tiro
+  trackEnemy(game) {
     const me = this.me;
-    const range = me.weapon ? Math.min(me.weapon.range, 700) : 120;
+    const range = me.weapon ? Math.min(me.weapon.range, 750) : 140;
+    const t = this.lockTarget;
+    if (t && t.alive && t.phase === 'ground' && Math.hypot(t.x - me.x, t.y - me.y) < range * 1.15 && !game.map.lineBlocked(me.x, me.y, t.x, t.y)) {
+      return t;
+    }
+    return this.nearestEnemy(game, range);
+  }
+
+  nearestEnemy(game, maxRange) {
+    const me = this.me;
+    const range = maxRange || (me.weapon ? Math.min(me.weapon.range, 700) : 120);
     let best = null;
     let bd = range;
     for (const c of game.chars) {
