@@ -196,11 +196,12 @@ export class TouchControls {
     let label = null;
     if (player.alive && player.phase === 'bus') label = 'SALTA';
     else if (player.alive && player.phase === 'air' && !player.gliding) label = 'APRI DELTAPLANO';
+    // in volo i pulsanti piccoli si nascondono; a terra devono sempre tornare visibili
+    this.root.classList.toggle('in-air', player.alive && player.phase !== 'ground');
     if (label === this.jumpLabel) return;
     this.jumpLabel = label;
     this.jumpBtn.classList.toggle('hidden', !label);
     if (label) this.jumpBtn.textContent = label;
-    this.root.classList.toggle('in-air', !!label || player.phase === 'air');
   }
 
   // Il pulsante sotto quello di fuoco cambia nome in base a cosa hai vicino
