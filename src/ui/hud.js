@@ -90,7 +90,7 @@ export class Hud {
   drawDrop(ctx, cx, y) {
     const g = this.game;
     const p = g.player;
-    const key = this.touch ? 'il pulsante col proiettile' : 'SPAZIO';
+    const key = this.touch ? (p.phase === 'bus' ? 'SALTA' : 'APRI DELTAPLANO') : 'SPAZIO';
     let title;
     let sub;
     if (p.phase === 'bus') {

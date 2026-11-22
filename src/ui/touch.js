@@ -41,6 +41,7 @@ export class TouchControls {
         <button class="t-round t-build t-outer" style="--a:128deg" data-piece aria-label="Pezzo">${ICONS.piece}</button>
         <button class="t-round t-build t-outer" style="--a:98deg" data-tap="KeyG" aria-label="Modifica">${ICONS.edit}</button>
       </div>
+      <button class="t-jump hidden" data-jump>SALTA</button>
       <div class="t-top">
         <button class="t-small" data-tap="KeyM">MAPPA</button>
         <button class="t-small" data-pause>II</button>
@@ -69,6 +70,12 @@ export class TouchControls {
       e.preventDefault();
       this.pieceIndex = (this.pieceIndex + 1) % PIECE_ORDER.length;
       input.pressed.add({ wall: 'KeyZ', barrier: 'KeyX', bunker: 'KeyC' }[PIECE_ORDER[this.pieceIndex]]);
+    });
+    // SALTA dal bus / APRI DELTAPLANO in caduta libera (preme SPAZIO)
+    this.jumpBtn = root.querySelector('[data-jump]');
+    this.jumpBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      input.pressed.add('Space');
     });
     root.querySelector('[data-pause]').addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -176,6 +183,18 @@ export class TouchControls {
         if (e.pointerId === id) reset();
       });
     }
+  }
+
+  // Mostra il pulsante giusto in base a dove si trova il giocatore
+  setDropState(player) {
+    let label = null;
+    if (player.alive && player.phase === 'bus') label = 'SALTA';
+    else if (player.alive && player.phase === 'air' && !player.gliding) label = 'APRI DELTAPLANO';
+    if (label === this.jumpLabel) return;
+    this.jumpLabel = label;
+    this.jumpBtn.classList.toggle('hidden', !label);
+    if (label) this.jumpBtn.textContent = label;
+    this.root.classList.toggle('in-air', !!label || player.phase === 'air');
   }
 
   setBuildVisible(on) {

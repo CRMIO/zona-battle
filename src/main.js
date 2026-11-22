@@ -170,6 +170,7 @@ function frame(now) {
     game.camera.width = window.innerWidth;
     game.camera.height = window.innerHeight;
     if (!game.paused) game.update(dt);
+    if (input.touch.enabled) touchUi.setDropState(game.player);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     game.render(game.paused ? 0 : dt);
   }

@@ -431,3 +431,16 @@ body.touch .controls { display: none; }
 .cat.active { background: rgba(255, 211, 77, 0.18); border-color: #ffd34d; color: #ffd34d; }
 .skin-tier { text-transform: none; }
 @media (max-height: 520px) { .cat { padding: 4px; font-size: 12px; } }
+
+/* Pulsante grande per lanciarsi dal bus / aprire il deltaplano (telefono) */
+.t-jump {
+  position: absolute; right: 140px; bottom: 120px; min-width: 150px; height: 64px; padding: 0 20px;
+  border-radius: 32px; border: 3px solid #fff; pointer-events: auto;
+  background: linear-gradient(#ffe066, #f5b700); color: #241800;
+  font-family: var(--display); font-size: 20px; box-shadow: 0 6px 0 #a67800, 0 10px 24px rgba(0, 0, 0, 0.4);
+  animation: t-pulse 1s ease-in-out infinite;
+}
+.t-jump:active { transform: translateY(3px); box-shadow: 0 3px 0 #a67800; }
+@keyframes t-pulse { 50% { transform: scale(1.06); } }
+/* in volo non servono i pulsanti per costruire, usare, ricaricare */
+#touch.in-air .t-round { display: none; }

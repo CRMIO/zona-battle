@@ -24,8 +24,9 @@ export class Camera {
     this.y += (target.y - this.y) * t;
 
     // Non mostrare troppo oltre i bordi della mappa
-    const hw = this.viewW / 2 - 60;
-    const hh = this.viewH / 2 - 60;
+    // vicino ai bordi la telecamera si ferma, ma mai troppo lontano dal giocatore (anche con la visuale larga)
+    const hw = Math.min(this.viewW / 2 - 60, 500);
+    const hh = Math.min(this.viewH / 2 - 60, 350);
     if (worldW > this.viewW) this.x = Math.max(hw, Math.min(worldW - hw, this.x));
     if (worldH > this.viewH) this.y = Math.max(hh, Math.min(worldH - hh, this.y));
 
