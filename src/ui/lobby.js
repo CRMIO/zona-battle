@@ -1,11 +1,19 @@
-// Lobby: anteprima del personaggio, armadietto (skin possedute) e negozio (skin da comprare).
+// Lobby: anteprima del personaggio, armadietto (oggetti posseduti), negozio, rank e armi.
+// Armadietto e negozio hanno tre categorie: skin, deltaplani e picconi.
 import { SKINS, TIER_INFO, SKIN_RARITIES, SKIN_RARITY_ORDER, getSkin, rankSkinIndex, rarityRank } from '../data/skins.js';
+import { GLIDERS, PICKAXES, getGlider, getPickaxe } from '../data/cosmetics.js';
 import { WEAPONS, RARITIES, RARITY_ORDER } from '../data/weapons.js';
 import { AMMO } from '../data/items.js';
-import { drawWeapon } from '../render/art.js';
-import { drawCharacter } from '../render/art.js';
+import { drawWeapon, drawCharacter, drawGlider, drawPickaxe } from '../render/art.js';
 import { storeSave, modeKey } from '../save.js';
-import { TIERS, DIVISIONS, RP_PER_DIV, CHAMPION_RP, rankFromRP, nextRankName, rankBadgeSVG, allRanks } from '../data/ranks.js';
+import { TIERS, RP_PER_DIV, rankFromRP, nextRankName, rankBadgeSVG, allRanks } from '../data/ranks.js';
+
+// Le tre categorie di oggetti: dove stanno nel salvataggio e come si chiamano
+const CATS = {
+  skins: { label: 'Skin', one: 'skin', items: SKINS, owned: 'owned', sel: 'selected', get: getSkin },
+  gliders: { label: 'Deltaplani', one: 'deltaplano', items: GLIDERS, owned: 'ownedGliders', sel: 'glider', get: getGlider },
+  pickaxes: { label: 'Picconi', one: 'piccone', items: PICKAXES, owned: 'ownedPickaxes', sel: 'pickaxe', get: getPickaxe },
+};
 
 export class Lobby {
   constructor(root, save, onPlay) {
@@ -13,7 +21,8 @@ export class Lobby {
     this.save = save;
     this.onPlay = onPlay;
     this.tab = 'locker';
-    this.preview = save.selected; // skin mostrata in grande (anche da provare nel negozio)
+    this.cat = 'skins';
+    this.preview = { cat: 'skins', id: save.selected }; // oggetto mostrato in grande (anche da provare)
     this.visible = false;
     this.filter = 'all';
     this.cardCache = new Map();
@@ -57,12 +66,14 @@ export class Lobby {
               <button data-tab="ranks">Rank</button>
               <button data-tab="weapons">Armi</button>
             </div>
+            <div class="cats" data-cats></div>
             <div class="filters" data-filters></div>
             <p class="panel-note" data-note></p>
             <div class="grid" data-grid></div>
           </section>
         </main>
         <footer class="controls">
+          <span><b>Spazio</b> lanciati dal bus / apri deltaplano</span>
           <span><b>WASD</b> muoviti</span><span><b>Shift</b> corri</span><span><b>Mouse</b> mira</span>
           <span><b>Click</b> spara / usa</span><span><b>R</b> ricarica</span><span><b>F</b> piccone</span>
           <span><b>1–5</b> inventario</span><span><b>Q</b> costruisci</span><span><b>Z X C</b> muro / barriera / bunker</span>
@@ -85,15 +96,21 @@ export class Lobby {
     this.root.querySelectorAll('[data-tab]').forEach((b) =>
       b.addEventListener('click', () => {
         this.tab = b.dataset.tab;
-        this.preview = this.save.selected;
+        this.resetPreview();
         this.render();
       })
     );
   }
 
+  // L'anteprima torna all'oggetto equipaggiato della categoria scelta
+  resetPreview() {
+    const c = CATS[this.cat];
+    this.preview = { cat: this.cat, id: this.save[c.sel] };
+  }
+
   show() {
     this.visible = true;
-    this.preview = this.save.selected;
+    this.resetPreview();
     this.root.classList.remove('hidden');
     this.render();
     const loop = (t) => {
@@ -117,24 +134,25 @@ export class Lobby {
     this.toastT = setTimeout(() => el.classList.remove('show'), 1800);
   }
 
-  buy(skin) {
-    if (this.save.owned.includes(skin.id) || skin.tier === 'rank') return;
-    if (this.save.coins < skin.price) {
-      this.toast(`Ti mancano ${skin.price - this.save.coins} monete`);
+  buy(cat, item) {
+    const c = CATS[cat];
+    if (this.save[c.owned].includes(item.id) || item.tier === 'rank') return;
+    if (this.save.coins < item.price) {
+      this.toast(`Ti mancano ${item.price - this.save.coins} monete`);
       return;
     }
-    this.save.coins -= skin.price;
-    this.save.owned.push(skin.id);
-    this.save.selected = skin.id;
-    this.preview = skin.id;
+    this.save.coins -= item.price;
+    this.save[c.owned].push(item.id);
+    this.save[c.sel] = item.id;
+    this.preview = { cat, id: item.id };
     storeSave(this.save);
-    this.toast(`${skin.name} è tua! Equipaggiata.`);
+    this.toast(`${item.name}: ${c.one === 'skin' ? 'è tua' : 'è tuo'}! Equipaggiato.`);
     this.render();
   }
 
-  equip(skin) {
-    this.save.selected = skin.id;
-    this.preview = skin.id;
+  equip(cat, item) {
+    this.save[CATS[cat].sel] = item.id;
+    this.preview = { cat, id: item.id };
     storeSave(this.save);
     this.render();
   }
@@ -145,55 +163,42 @@ export class Lobby {
     for (const el of this.root.querySelectorAll('[data-stat]')) el.textContent = s[el.dataset.stat];
     for (const b of this.root.querySelectorAll('[data-tab]')) b.classList.toggle('active', b.dataset.tab === this.tab);
 
-    const skin = getSkin(this.preview);
-    const owned = s.owned.includes(skin.id);
-    this.root.querySelector('[data-name]').textContent = skin.name;
-    const tier = this.root.querySelector('[data-tier]');
-    tier.textContent = TIER_INFO[skin.tier].name;
-    tier.style.background = TIER_INFO[skin.tier].color;
-
-    const action = this.root.querySelector('[data-action]');
-    action.innerHTML = '';
-    if (!owned && skin.tier === 'rank') {
-      const need = rankFromRP(rankSkinIndex(skin) * RP_PER_DIV).name;
-      action.innerHTML = `<div class="missing locked">🔒 Gratis: si sblocca raggiungendo <b>${need}</b> in una classificata</div>`;
-    } else if (!owned) {
-      const btn = document.createElement('button');
-      btn.className = 'buy';
-      btn.innerHTML = `Compra · <span class="coin small"></span> ${skin.price.toLocaleString('it-IT')}`;
-      btn.disabled = s.coins < skin.price;
-      btn.addEventListener('click', () => this.buy(skin));
-      action.appendChild(btn);
-      if (s.coins < skin.price) {
-        const p = document.createElement('div');
-        p.className = 'missing';
-        p.textContent = `Ti mancano ${(skin.price - s.coins).toLocaleString('it-IT')} monete (${Math.ceil((skin.price - s.coins) / 100)} vittorie)`;
-        action.appendChild(p);
-      }
-    } else if (s.selected === skin.id) {
-      action.innerHTML = '<div class="equipped">✓ Equipaggiata</div>';
-    }
-
+    this.renderStage();
     this.renderModes();
-    const grid = this.root.querySelector('[data-grid]');
-    if (this.tab === 'ranks') {
-      this.renderRanks(grid);
-      return;
-    }
-    grid.classList.remove('ranks');
 
+    const grid = this.root.querySelector('[data-grid]');
+    const cats = this.root.querySelector('[data-cats]');
     const filters = this.root.querySelector('[data-filters]');
-    if (this.tab === 'weapons') {
+    grid.classList.remove('ranks', 'weapons');
+    if (this.tab === 'ranks' || this.tab === 'weapons') {
+      cats.innerHTML = '';
       filters.innerHTML = '';
-      this.renderWeapons(grid);
+      if (this.tab === 'ranks') this.renderRanks(grid);
+      else this.renderWeapons(grid);
       return;
     }
-    grid.classList.remove('weapons');
+
+    // Categoria: skin, deltaplani, picconi
+    cats.innerHTML = '';
+    for (const [id, c] of Object.entries(CATS)) {
+      const b = document.createElement('button');
+      b.className = 'cat' + (this.cat === id ? ' active' : '');
+      b.textContent = c.label;
+      b.addEventListener('click', () => {
+        this.cat = id;
+        this.filter = 'all';
+        this.resetPreview();
+        this.render();
+      });
+      cats.appendChild(b);
+    }
+    const c = CATS[this.cat];
 
     // Filtro per rarità
-    const opts = [['all', 'Tutte', '#9fb0c2'], ...SKIN_RARITY_ORDER.map((r) => [r, SKIN_RARITIES[r].name, SKIN_RARITIES[r].color])];
-    if (this.tab === 'shop') opts.push(['rank', 'Premi rank', TIER_INFO.rank.color]);
-    else opts.splice(1, 0, ['free', 'Gratis', TIER_INFO.free.color]), opts.push(['rank', 'Premi rank', TIER_INFO.rank.color]);
+    const opts = [['all', 'Tutte', '#9fb0c2']];
+    if (this.tab === 'locker') opts.push(['free', 'Gratis', TIER_INFO.free.color]);
+    for (const r of SKIN_RARITY_ORDER) opts.push([r, SKIN_RARITIES[r].name, SKIN_RARITIES[r].color]);
+    if (this.cat === 'skins') opts.push(['rank', 'Premi rank', TIER_INFO.rank.color]);
     if (!opts.some((o) => o[0] === this.filter)) this.filter = 'all';
     filters.innerHTML = '';
     for (const [id, label, color] of opts) {
@@ -208,22 +213,24 @@ export class Lobby {
       filters.appendChild(b);
     }
 
-    const all = this.tab === 'locker' ? SKINS.filter((k) => s.owned.includes(k.id)) : SKINS.filter((k) => !s.owned.includes(k.id));
+    const owned = s[c.owned];
+    const all = c.items.filter((k) => (this.tab === 'locker' ? owned.includes(k.id) : !owned.includes(k.id)));
     const list = all
       .filter((k) => this.filter === 'all' || k.tier === this.filter)
       .sort((a, b) => rarityRank(a) - rarityRank(b) || a.name.localeCompare(b.name, 'it'));
-    const ownedCount = SKINS.filter((k) => s.owned.includes(k.id)).length;
+    const ownedCount = c.items.filter((k) => owned.includes(k.id)).length;
     this.root.querySelector('[data-note]').textContent =
       this.tab === 'locker'
-        ? `Hai ${ownedCount} skin su ${SKINS.length}. Scegli quella da usare in partita.`
+        ? `Hai ${ownedCount} ${c.label.toLowerCase()} su ${c.items.length}. Clicca per equipaggiare.`
         : all.length
-          ? `${all.length} skin da sbloccare · ` + SKIN_RARITY_ORDER.map((r) => `${SKIN_RARITIES[r].name} ${SKIN_RARITIES[r].price}`).join(' · ') + ' monete'
-          : 'Hai già tutte le skin. Complimenti!';
+          ? `${all.length} ${c.label.toLowerCase()} da sbloccare · ` + SKIN_RARITY_ORDER.map((r) => `${SKIN_RARITIES[r].name} ${SKIN_RARITIES[r].price}`).join(' · ') + ' monete'
+          : `Hai già tutti gli oggetti di questa categoria. Complimenti!`;
 
     grid.innerHTML = '';
     for (const k of list) {
       const card = document.createElement('button');
-      card.className = `card tier-${k.tier}` + (k.id === this.preview ? ' active' : '') + (k.id === s.selected ? ' selected' : '');
+      const sel = s[c.sel] === k.id;
+      card.className = `card tier-${k.tier}` + (this.preview.cat === this.cat && k.id === this.preview.id ? ' active' : '') + (sel ? ' selected' : '');
       card.style.setProperty('--c', TIER_INFO[k.tier].color);
       const cv = document.createElement('canvas');
       cv.width = cv.height = 120;
@@ -245,18 +252,58 @@ export class Lobby {
         foot.innerHTML = `<span class="coin small"></span> ${k.price.toLocaleString('it-IT')}`;
         if (s.coins < k.price) foot.classList.add('poor');
       } else {
-        foot.textContent = k.id === s.selected ? 'Equipaggiata' : 'Equipaggia';
+        foot.textContent = sel ? 'Equipaggiato' : 'Equipaggia';
       }
       card.appendChild(foot);
       card.addEventListener('click', () => {
-        if (this.tab === 'locker') this.equip(k);
+        if (this.tab === 'locker') this.equip(this.cat, k);
         else {
-          this.preview = k.id;
+          this.preview = { cat: this.cat, id: k.id };
           this.render();
         }
       });
       grid.appendChild(card);
-      this.drawCard(cv, k);
+      this.drawCard(cv, this.cat, k);
+    }
+  }
+
+  // Nome, rarità e pulsante compra/equipaggiato dell'oggetto in anteprima
+  renderStage() {
+    const s = this.save;
+    const c = CATS[this.preview.cat];
+    const item = c.get(this.preview.id);
+    const owned = s[c.owned].includes(item.id);
+    this.root.querySelector('[data-name]').textContent = item.name;
+    const tier = this.root.querySelector('[data-tier]');
+    tier.textContent = `${TIER_INFO[item.tier].name} · ${c.one}`;
+    tier.style.background = TIER_INFO[item.tier].color;
+
+    const action = this.root.querySelector('[data-action]');
+    action.innerHTML = '';
+    if (!owned && item.tier === 'rank') {
+      const need = rankFromRP(rankSkinIndex(item) * RP_PER_DIV).name;
+      action.innerHTML = `<div class="missing locked">🔒 Gratis: si sblocca raggiungendo <b>${need}</b> in una classificata</div>`;
+    } else if (!owned) {
+      const btn = document.createElement('button');
+      btn.className = 'buy';
+      btn.innerHTML = `Compra · <span class="coin small"></span> ${item.price.toLocaleString('it-IT')}`;
+      btn.disabled = s.coins < item.price;
+      btn.addEventListener('click', () => this.buy(this.preview.cat, item));
+      action.appendChild(btn);
+      if (s.coins < item.price) {
+        const p = document.createElement('div');
+        p.className = 'missing';
+        p.textContent = `Ti mancano ${(item.price - s.coins).toLocaleString('it-IT')} monete (${Math.ceil((item.price - s.coins) / 100)} vittorie)`;
+        action.appendChild(p);
+      }
+    } else if (s[c.sel] === item.id) {
+      action.innerHTML = '<div class="equipped">✓ Equipaggiato</div>';
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'buy';
+      btn.textContent = 'Equipaggia';
+      btn.addEventListener('click', () => this.equip(this.preview.cat, item));
+      action.appendChild(btn);
     }
   }
 
@@ -351,28 +398,40 @@ export class Lobby {
         lab.textContent = got ? reward.name : '🔒 ' + reward.name;
         cell.appendChild(lab);
         cell.addEventListener('click', () => {
-          this.preview = reward.id;
-          if (got) this.equip(reward);
+          this.preview = { cat: 'skins', id: reward.id };
+          if (got) this.equip('skins', reward);
           else this.render();
         });
         row.appendChild(cell);
-        this.drawCard(cv, reward);
+        this.drawCard(cv, 'skins', reward);
       }
       grid.appendChild(row);
     });
   }
 
-  // Le anteprime delle carte si disegnano una volta sola e poi si copiano (sono più di 200)
-  drawCard(cv, skin) {
-    let img = this.cardCache.get(skin.id);
+  // Le anteprime delle carte si disegnano una volta sola e poi si copiano (sono centinaia)
+  drawCard(cv, cat, item) {
+    const key = cat + ':' + item.id;
+    let img = this.cardCache.get(key);
     if (!img) {
       img = document.createElement('canvas');
       img.width = img.height = 120;
       const c = img.getContext('2d');
       c.translate(60, 62);
-      c.scale(2, 2);
-      drawCharacter(c, skin, { angle: -Math.PI / 2, item: { kind: 'weapon', id: 'rifle', rarity: 'rare' }, t: 0 });
-      this.cardCache.set(skin.id, img);
+      if (cat === 'skins') {
+        c.scale(2, 2);
+        drawCharacter(c, item, { angle: -Math.PI / 2, item: { kind: 'weapon', id: 'rifle', rarity: 'rare' }, t: 0 });
+      } else if (cat === 'gliders') {
+        c.scale(0.95, 0.95);
+        c.rotate(-Math.PI / 2);
+        drawGlider(c, item, 0);
+      } else {
+        c.rotate(-Math.PI / 4);
+        c.scale(2.1, 2.1);
+        c.translate(-22, 0);
+        drawPickaxe(c, item);
+      }
+      this.cardCache.set(key, img);
     }
     cv.getContext('2d').drawImage(img, 0, 0);
   }
@@ -380,7 +439,11 @@ export class Lobby {
   drawPreview(t) {
     const cv = this.canvas;
     const ctx = cv.getContext('2d');
-    const skin = getSkin(this.preview);
+    const s = this.save;
+    const cat = this.preview.cat;
+    const skin = cat === 'skins' ? getSkin(this.preview.id) : getSkin(s.selected);
+    const glider = cat === 'gliders' ? getGlider(this.preview.id) : getGlider(s.glider);
+    const pickaxe = cat === 'pickaxes' ? getPickaxe(this.preview.id) : getPickaxe(s.pickaxe);
     ctx.clearRect(0, 0, cv.width, cv.height);
     // piedistallo
     const g = ctx.createRadialGradient(180, 200, 20, 180, 200, 160);
@@ -397,17 +460,27 @@ export class Lobby {
     ctx.stroke();
 
     ctx.save();
-    ctx.translate(180, 190);
-    ctx.scale(4.2, 4.2);
-    const angle = -Math.PI / 2 + Math.sin(t * 0.8) * 0.9;
-    const items = [
-      { kind: 'weapon', id: 'rifle', rarity: 'legendary' },
-      { kind: 'weapon', id: 'shotgun', rarity: 'epic' },
-      null,
-    ];
-    const item = items[Math.floor(t / 3) % items.length];
-    const swing = item ? 0 : (t * 2) % 1;
-    drawCharacter(ctx, skin, { angle, walk: t * 6, item, swing, t });
+    if (cat === 'gliders') {
+      // in volo con il deltaplano, che ondeggia
+      const angle = -Math.PI / 2 + Math.sin(t * 0.9) * 0.35;
+      ctx.translate(180, 185 + Math.sin(t * 1.7) * 6);
+      ctx.scale(2.6, 2.6);
+      drawCharacter(ctx, skin, { angle, item: null, pickaxe, t });
+      ctx.rotate(angle);
+      drawGlider(ctx, glider, t);
+    } else {
+      ctx.translate(180, 190);
+      ctx.scale(4.2, 4.2);
+      const angle = -Math.PI / 2 + Math.sin(t * 0.8) * 0.9;
+      let item;
+      if (cat === 'pickaxes') item = null;
+      else {
+        const items = [{ kind: 'weapon', id: 'rifle', rarity: 'legendary' }, { kind: 'weapon', id: 'shotgun', rarity: 'epic' }, null];
+        item = items[Math.floor(t / 3) % items.length];
+      }
+      const swing = item ? 0 : (t * 1.6) % 1;
+      drawCharacter(ctx, skin, { angle, walk: t * 6, item, swing, pickaxe, t });
+    }
     ctx.restore();
   }
 }

@@ -39,7 +39,7 @@ export class Bullet {
         return;
       }
       for (const c of game.chars) {
-        if (c === this.owner || !c.alive) continue;
+        if (c === this.owner || !c.alive || c.phase !== 'ground') continue;
         const ex = this.x - c.x;
         const ey = this.y - c.y;
         if (ex * ex + ey * ey < c.r * c.r) {

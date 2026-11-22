@@ -31,6 +31,25 @@ export class PlayerController {
     it.sprint = false;
     if (!me.alive || game.over) return;
 
+    // --- Bus e volo: SPAZIO (o il pulsante di fuoco sul telefono) per lanciarti e per aprire il deltaplano
+    if (me.phase !== 'ground') {
+      const go = input.wasPressed('Space') || touch.firePressed || input.mouse.pressed;
+      if (me.phase === 'bus' && go) game.jump(me);
+      else if (me.phase === 'air') {
+        if (go) game.openGlider(me);
+        if (input.isDown('KeyW') || input.isDown('ArrowUp')) it.my -= 1;
+        if (input.isDown('KeyS') || input.isDown('ArrowDown')) it.my += 1;
+        if (input.isDown('KeyA') || input.isDown('ArrowLeft')) it.mx -= 1;
+        if (input.isDown('KeyD') || input.isDown('ArrowRight')) it.mx += 1;
+        if (touch.enabled && (touch.mx || touch.my)) {
+          it.mx = touch.mx;
+          it.my = touch.my;
+        }
+      }
+      if (input.wasPressed('KeyM')) game.showBigMap = !game.showBigMap;
+      return;
+    }
+
     // --- Movimento: tastiera o joystick sinistro
     if (input.isDown('KeyW') || input.isDown('ArrowUp')) it.my -= 1;
     if (input.isDown('KeyS') || input.isDown('ArrowDown')) it.my += 1;
@@ -112,7 +131,7 @@ export class PlayerController {
     let best = null;
     let bd = range;
     for (const c of game.chars) {
-      if (c === me || !c.alive) continue;
+      if (c === me || !c.alive || c.phase !== 'ground') continue;
       const d = Math.hypot(c.x - me.x, c.y - me.y);
       if (d < bd && !game.map.lineBlocked(me.x, me.y, c.x, c.y)) {
         bd = d;

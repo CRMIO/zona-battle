@@ -76,7 +76,7 @@ const ROLES = [
 ];
 
 // Il tema, con i suoi colori
-const THEMES = [
+export const THEMES = [
   { t: 'del Fuoco', body: '#d63a1f', body2: '#ffb02e', pack: '#5a1a0a' },
   { t: 'di Ghiaccio', body: '#bfe6ff', body2: '#5aa9e6', pack: '#2f5f8a' },
   { t: 'della Notte', body: '#1b2140', body2: '#6c7bd9', pack: '#0d1020' },

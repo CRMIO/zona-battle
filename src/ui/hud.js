@@ -74,7 +74,8 @@ export class Hud {
     } else {
       this.drawKillFeed(ctx, 16, 16);
     }
-    this.drawMessage(ctx, W / 2, H * 0.26);
+    if (p.alive && p.phase !== 'ground') this.drawDrop(ctx, W / 2, touch ? H * 0.34 : H * 0.3);
+    else this.drawMessage(ctx, W / 2, H * 0.26);
     if (g.showBigMap) {
       const size = Math.min(W, H) - (touch ? 40 : 120);
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -83,6 +84,33 @@ export class Hud {
       if (!touch) text(ctx, 'Premi M per chiudere la mappa', W / 2, (H + size) / 2 + 28, { align: 'center', size: 14 });
     }
     if (p.alive && !g.showBigMap && !g.over && !touch) this.drawCrosshair(ctx);
+  }
+
+  // Bus e volo: istruzioni e altitudine
+  drawDrop(ctx, cx, y) {
+    const g = this.game;
+    const p = g.player;
+    const key = this.touch ? 'il pulsante col proiettile' : 'SPAZIO';
+    let title;
+    let sub;
+    if (p.phase === 'bus') {
+      title = 'SEI SUL BUS VOLANTE';
+      sub = `Premi ${key} per lanciarti · ${Math.max(0, Math.ceil(26 - g.bus.t))} s alla fine del percorso`;
+    } else {
+      title = `ALTITUDINE ${Math.round(p.alt * 900)} m`;
+      sub = p.gliding ? 'Deltaplano aperto: plana verso dove vuoi atterrare' : `Caduta libera · premi ${key} per aprire il deltaplano`;
+    }
+    ctx.font = `800 15px ${FONT}`;
+    const w = Math.max(ctx.measureText(sub).width, 260) + 40;
+    panel(ctx, cx - w / 2, y - 30, w, 58, 10, 'rgba(8,12,20,0.7)');
+    text(ctx, title, cx, y - 6, { align: 'center', size: 20, color: '#ffd34d', weight: 900 });
+    text(ctx, sub, cx, y + 17, { align: 'center', size: 14, weight: 700, stroke: false });
+    if (p.phase === 'air') {
+      const bw = 200;
+      panel(ctx, cx - bw / 2, y + 34, bw, 8, 4, 'rgba(0,0,0,0.6)');
+      ctx.fillStyle = p.gliding ? '#5fdc8f' : '#7cc4ff';
+      ctx.fillRect(cx - bw / 2, y + 34, bw * Math.max(0, p.alt), 8);
+    }
   }
 
   // Sul telefono: quale slot della barra è stato toccato (-1 = piccone)
@@ -136,7 +164,7 @@ export class Hud {
 
     for (let i = 0; i < 6; i++) {
       const slot = i - 1;
-      const item = slot < 0 ? { kind: 'pickaxe' } : p.slots[slot];
+      const item = slot < 0 ? { kind: 'pickaxe', def: p.pickaxe } : p.slots[slot];
       const sel = p.active === slot;
       const x = x0 + i * (box + gap);
       const y = y0 - (sel ? 8 : 0);
@@ -242,6 +270,23 @@ export class Hud {
       ctx.setLineDash([]);
     }
 
+    if (g.bus.active) {
+      const b = g.bus;
+      ctx.strokeStyle = '#ffd34d';
+      ctx.lineWidth = big ? 3 : 2;
+      ctx.setLineDash([6, 5]);
+      ctx.beginPath();
+      ctx.moveTo(x + b.x0 * s, y + b.y0 * s);
+      ctx.lineTo(x + b.x1 * s, y + b.y1 * s);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#1fa59a';
+      ctx.strokeStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(x + b.x * s, y + b.y * s, big ? 8 : 5, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+    }
     if (big) {
       for (const poi of map.pois) {
         text(ctx, poi.name, x + poi.x * s, y + poi.y * s, { align: 'center', size: 13, weight: 800 });

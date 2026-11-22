@@ -58,7 +58,10 @@ function startMatch() {
   endEl.classList.add('hidden');
   pauseEl.classList.add('hidden');
   const mode = { ...save.mode };
-  game = new Game({ ctx, input, skinId: save.selected, onEnd: matchEnded, mode, rankRP: save.rp[modeKey(mode)] });
+  game = new Game({
+    ctx, input, skinId: save.selected, gliderId: save.glider, pickaxeId: save.pickaxe,
+    onEnd: matchEnded, mode, rankRP: save.rp[modeKey(mode)],
+  });
   canvas.classList.add('playing');
   document.body.classList.add('in-game');
   if (input.touch.enabled) {

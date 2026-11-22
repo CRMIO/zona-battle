@@ -420,3 +420,14 @@ body.touch .controls { display: none; }
 .weapon-cell canvas { width: 100%; max-width: 120px; height: auto; }
 .weapon-cell b { display: block; color: var(--c); font-size: 11px; text-transform: uppercase; }
 @media (max-width: 900px) { .weapon-row { grid-template-columns: repeat(5, 1fr); } .weapon-info { grid-column: 1 / -1; } }
+
+/* Categorie dell'armadietto e del negozio */
+.cats { display: flex; gap: 6px; margin-top: 10px; }
+.cats:empty { display: none; }
+.cat {
+  flex: 1; padding: 7px; border-radius: 8px; border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04); color: var(--muted); font-weight: 800; font-size: 14px;
+}
+.cat.active { background: rgba(255, 211, 77, 0.18); border-color: #ffd34d; color: #ffd34d; }
+.skin-tier { text-transform: none; }
+@media (max-height: 520px) { .cat { padding: 4px; font-size: 12px; } }

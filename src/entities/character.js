@@ -27,6 +27,9 @@ export class Character {
     this.name = name;
     this.skin = skin;
     this.isPlayer = isPlayer;
+    this.phase = 'ground'; // 'bus' sul bus, 'air' in volo, 'ground' a terra
+    this.alt = 0;
+    this.gliding = false;
 
     this.hp = CONFIG.MAX_HP;
     this.shield = 0;

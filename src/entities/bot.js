@@ -140,7 +140,7 @@ export class BotBrain {
     let best = null;
     let bd = Infinity;
     for (const c of g.chars) {
-      if (c === me || !c.alive) continue;
+      if (c === me || !c.alive || c.phase !== 'ground') continue;
       const d = Math.hypot(c.x - me.x, c.y - me.y);
       // chi è nascosto in un cespuglio e non spara si vede solo da vicino
       const range = g.map.inBush(c.x, c.y) && g.time - c.lastShot > 1.2 ? 160 : 800;

@@ -100,24 +100,252 @@ export function drawWeapon(ctx, id, rarity, x0 = 0, y0 = 0) {
   ctx.restore();
 }
 
-export function drawPickaxe(ctx) {
+const DEFAULT_PICK = { shape: 'classic', head: '#b4bec8', accent: '#4b535c', handle: '#6b4423' };
+
+// Piccone disegnato lungo +x: manico da (0,0) a (30,0), testa in fondo
+export function drawPickaxe(ctx, p = DEFAULT_PICK) {
+  ctx.save();
   ctx.lineCap = 'round';
-  ctx.strokeStyle = '#6b4423';
+  ctx.lineJoin = 'round';
+  const long = p.shape === 'scythe' || p.shape === 'sword';
+  ctx.strokeStyle = p.handle;
   ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.moveTo(0, 0);
-  ctx.lineTo(30, 0);
+  ctx.lineTo(p.shape === 'sword' ? 10 : long ? 36 : 30, 0);
   ctx.stroke();
-  ctx.fillStyle = '#b4bec8';
-  ctx.strokeStyle = '#4b535c';
+  if (p.glow) {
+    ctx.shadowColor = p.glow;
+    ctx.shadowBlur = 10;
+  }
+  ctx.fillStyle = p.head;
+  ctx.strokeStyle = p.accent;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(25, -16);
-  ctx.quadraticCurveTo(38, -5, 36, 0);
-  ctx.quadraticCurveTo(38, 5, 25, 16);
-  ctx.quadraticCurveTo(33, 0, 25, -16);
+  switch (p.shape) {
+    case 'axe':
+      ctx.moveTo(24, -3);
+      ctx.lineTo(24, -15);
+      ctx.quadraticCurveTo(36, -12, 36, 0);
+      ctx.lineTo(32, 3);
+      ctx.lineTo(24, 3);
+      ctx.closePath();
+      break;
+    case 'hammer':
+      ctx.rect(24, -12, 11, 24);
+      break;
+    case 'wrench':
+      ctx.moveTo(26, -10);
+      ctx.lineTo(34, -10);
+      ctx.lineTo(34, -4);
+      ctx.lineTo(30, -4);
+      ctx.lineTo(30, 4);
+      ctx.lineTo(34, 4);
+      ctx.lineTo(34, 10);
+      ctx.lineTo(26, 10);
+      ctx.closePath();
+      break;
+    case 'scythe':
+      ctx.moveTo(34, -2);
+      ctx.quadraticCurveTo(30, -26, 8, -30);
+      ctx.quadraticCurveTo(26, -20, 30, -2);
+      ctx.closePath();
+      break;
+    case 'double':
+      ctx.moveTo(22, -20);
+      ctx.quadraticCurveTo(36, -6, 33, 0);
+      ctx.quadraticCurveTo(36, 6, 22, 20);
+      ctx.quadraticCurveTo(30, 0, 22, -20);
+      break;
+    case 'sword':
+      ctx.moveTo(14, -3);
+      ctx.lineTo(40, -3);
+      ctx.lineTo(46, 0);
+      ctx.lineTo(40, 3);
+      ctx.lineTo(14, 3);
+      ctx.closePath();
+      break;
+    case 'crystal':
+      ctx.moveTo(28, 0);
+      ctx.lineTo(33, -11);
+      ctx.lineTo(40, -4);
+      ctx.lineTo(42, 4);
+      ctx.lineTo(34, 11);
+      ctx.closePath();
+      break;
+    default: // classic
+      ctx.moveTo(25, -16);
+      ctx.quadraticCurveTo(38, -5, 36, 0);
+      ctx.quadraticCurveTo(38, 5, 25, 16);
+      ctx.quadraticCurveTo(33, 0, 25, -16);
+  }
   ctx.fill();
   ctx.stroke();
+  ctx.shadowBlur = 0;
+  // dettagli
+  if (p.shape === 'sword') {
+    ctx.fillStyle = p.accent;
+    ctx.fillRect(10, -8, 4, 16);
+  } else if (p.shape === 'crystal') {
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.beginPath();
+    ctx.moveTo(33, -11);
+    ctx.lineTo(34, 11);
+    ctx.stroke();
+  } else if (p.shape === 'hammer') {
+    ctx.fillStyle = p.accent;
+    ctx.fillRect(24, -2, 11, 4);
+  }
+  ctx.restore();
+}
+
+// ------------------------------------------------------------------ Deltaplani
+
+// Riempie l'area già tracciata (clip) con il disegno del deltaplano
+function gliderFill(ctx, g, t, w, h) {
+  ctx.fillStyle = g.c1;
+  ctx.fillRect(-w, -h, w * 2, h * 2);
+  ctx.fillStyle = g.c2;
+  switch (g.pattern) {
+    case 'stripes':
+      for (let y = -h; y < h; y += 16) ctx.fillRect(-w, y, w * 2, 8);
+      break;
+    case 'checker':
+      for (let y = -h; y < h; y += 12) for (let x = -w; x < w; x += 12) if (((x + y) / 12) % 2 === 0) ctx.fillRect(x, y, 12, 12);
+      break;
+    case 'chevron':
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = g.c2;
+      for (let x = -w; x < w; x += 18) {
+        ctx.beginPath();
+        ctx.moveTo(x, -h);
+        ctx.lineTo(x + 12, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      }
+      break;
+    case 'stars':
+      for (let i = 0; i < 16; i++) {
+        const x = Math.sin(i * 12.9898) * w * 0.9;
+        const y = Math.cos(i * 78.233) * h * 0.9;
+        ctx.globalAlpha = 0.6 + 0.4 * Math.sin(t * 3 + i);
+        ctx.beginPath();
+        ctx.arc(x, y, 2.2, 0, TAU);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      break;
+    case 'gradient': {
+      const gr = ctx.createLinearGradient(0, -h, 0, h);
+      gr.addColorStop(0, g.c1);
+      gr.addColorStop(0.5, g.c2);
+      gr.addColorStop(1, g.c1);
+      ctx.fillStyle = gr;
+      ctx.fillRect(-w, -h, w * 2, h * 2);
+      break;
+    }
+    case 'rainbow':
+      for (let i = 0; i < 7; i++) {
+        ctx.fillStyle = `hsl(${(t * 80 + i * 50) % 360}, 85%, 60%)`;
+        ctx.fillRect(-w, -h + (i * h * 2) / 7, w * 2, (h * 2) / 7 + 1);
+      }
+      break;
+  }
+}
+
+// Deltaplano visto dall'alto, centrato sul pilota, rivolto verso +x
+export function drawGlider(ctx, g, t = 0) {
+  ctx.save();
+  ctx.lineJoin = 'round';
+  const path = new Path2D();
+  switch (g.shape) {
+    case 'parafoil':
+      path.moveTo(-2, -52);
+      path.quadraticCurveTo(14, 0, -2, 52);
+      path.lineTo(-18, 48);
+      path.quadraticCurveTo(-4, 0, -18, -48);
+      path.closePath();
+      break;
+    case 'umbrella':
+      path.arc(0, 0, 44, 0, TAU);
+      break;
+    case 'wings':
+      for (const sd of [-1, 1]) {
+        path.moveTo(4, sd * 6);
+        path.quadraticCurveTo(10, sd * 40, -6, sd * 58);
+        path.quadraticCurveTo(-12, sd * 40, -22, sd * 34);
+        path.quadraticCurveTo(-10, sd * 20, -8, sd * 6);
+        path.closePath();
+      }
+      break;
+    case 'bat':
+      for (const sd of [-1, 1]) {
+        path.moveTo(6, sd * 4);
+        path.lineTo(10, sd * 54);
+        path.quadraticCurveTo(-4, sd * 44, -10, sd * 50);
+        path.quadraticCurveTo(-10, sd * 34, -20, sd * 32);
+        path.quadraticCurveTo(-12, sd * 18, -16, sd * 12);
+        path.lineTo(-6, sd * 4);
+        path.closePath();
+      }
+      break;
+    default: // delta
+      path.moveTo(28, 0);
+      path.lineTo(-16, -50);
+      path.lineTo(-6, 0);
+      path.lineTo(-16, 50);
+      path.closePath();
+  }
+  // ombra della vela
+  ctx.save();
+  ctx.translate(6, 8);
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.fill(path);
+  ctx.restore();
+
+  if (g.glow) {
+    ctx.shadowColor = g.glow;
+    ctx.shadowBlur = 14;
+  }
+  ctx.fillStyle = g.c1;
+  ctx.fill(path);
+  ctx.shadowBlur = 0;
+  ctx.save();
+  ctx.clip(path);
+  gliderFill(ctx, g, t, 60, 60);
+  if (g.shape === 'umbrella') {
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 8; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos((i / 8) * TAU) * 44, Math.sin((i / 8) * TAU) * 44);
+      ctx.stroke();
+    }
+  } else if (g.shape === 'parafoil') {
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+    ctx.lineWidth = 2;
+    for (let y = -44; y <= 44; y += 11) {
+      ctx.beginPath();
+      ctx.moveTo(-20, y);
+      ctx.lineTo(14, y);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+  ctx.strokeStyle = g.frame;
+  ctx.lineWidth = 2.5;
+  ctx.stroke(path);
+  // tiranti verso il pilota
+  ctx.strokeStyle = 'rgba(30,30,30,0.6)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (const sd of [-1, 1]) {
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-8, sd * 30);
+  }
+  ctx.stroke();
+  ctx.restore();
 }
 
 // ------------------------------------------------------------------ Personaggi
@@ -509,7 +737,7 @@ function drawHeld(ctx, s, o, r) {
     arm(ctx, sleeve, 0, 0, r * 0.75, 0);
     ctx.translate(r * 0.75, 0);
     ctx.rotate(-0.35);
-    drawPickaxe(ctx);
+    drawPickaxe(ctx, o.pickaxe);
     hand(ctx, handColor, 0, 0);
     ctx.restore();
   } else if (item.kind === 'weapon') {
@@ -624,7 +852,7 @@ export function drawItemIcon(ctx, data, size) {
       ctx.rotate(-Math.PI / 4);
       ctx.scale(s / 46, s / 46);
       ctx.translate(-20, 0);
-      drawPickaxe(ctx);
+      drawPickaxe(ctx, data.def);
       break;
     case 'item':
       if (data.id === 'bandage') {

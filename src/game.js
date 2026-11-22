@@ -15,6 +15,16 @@ import { circleHits, overlapsRect } from './systems/physics.js';
 import { drawCharacter, drawChest, drawPickup, pickupColor } from './render/art.js';
 import { Hud } from './ui/hud.js';
 import { botSkillRange } from './data/ranks.js';
+import { GLIDERS, PICKAXES, getGlider, getPickaxe } from './data/cosmetics.js';
+import { drawGlider } from './render/art.js';
+import { moveCircle } from './systems/physics.js';
+
+const BUS_TIME = 26;      // secondi che il bus impiega ad attraversare la mappa
+const SKYDIVE_SPEED = 560; // caduta libera: veloce
+const GLIDE_SPEED = 330;   // deltaplano: più lento ma si plana a lungo
+const SKYDIVE_FALL = 0.12; // altitudine persa al secondo (1 = in cima)
+const GLIDE_FALL = 0.065;
+const AUTO_GLIDER = 0.42;  // sotto questa altitudine il deltaplano si apre da solo
 
 // Pezzi da costruire: muro singolo, barriera (3 muri in fila), bunker (8 muri attorno a te)
 export const PIECES = {
@@ -30,7 +40,7 @@ const BOT_NAMES = [
 ];
 
 export class Game {
-  constructor({ ctx, input, skinId, onEnd, mode, rankRP = 0 }) {
+  constructor({ ctx, input, skinId, gliderId, pickaxeId, onEnd, mode, rankRP = 0 }) {
     this.ctx = ctx;
     this.mode = mode || { build: true, ranked: false };
     this.skillRange = botSkillRange(this.mode.ranked, rankRP);
@@ -61,7 +71,8 @@ export class Game {
     this.hurtFlash = 0;
     this.showBigMap = false;
 
-    this.spawnCharacters(skinId);
+    this.setupBus();
+    this.spawnCharacters(skinId, gliderId, pickaxeId);
     for (const spot of this.map.lootSpots) this.dropItems(spot.x, spot.y, floorLoot(this.rng), 18);
 
     this.playerCtl = new PlayerController(this.player);
@@ -71,37 +82,159 @@ export class Game {
     this.flashMessage('Trova armi nelle casse e sopravvivi alla tempesta!', '#ffffff', 4);
   }
 
-  spawnCharacters(skinId) {
-    const map = this.map;
-    const used = [];
-    const findSpot = () => {
-      for (let i = 0; i < 600; i++) {
-        const x = 300 + this.rng() * (map.width - 600);
-        const y = 300 + this.rng() * (map.height - 600);
-        if (map.isWaterAt(x, y)) continue;
-        if (map.queryObstacles(x, y, 30).some((o) => circleHits(o, x, y, 30))) continue;
-        if (map.houseAt(x, y)) continue;
-        const minD = i < 400 ? 900 : 350;
-        if (used.some((u) => Math.hypot(u.x - x, u.y - y) < minD)) continue;
-        used.push({ x, y });
-        return { x, y };
-      }
-      return { x: map.width / 2, y: map.height / 2 };
+  // Il bus volante attraversa la mappa in linea retta passando vicino al centro
+  setupBus() {
+    const W = this.map.width;
+    const H = this.map.height;
+    const a = this.rng() * Math.PI * 2;
+    const cx = W / 2 + (this.rng() - 0.5) * W * 0.3;
+    const cy = H / 2 + (this.rng() - 0.5) * H * 0.3;
+    const L = Math.min(W, H) * 0.46;
+    const clampX = (v) => Math.max(300, Math.min(W - 300, v));
+    const clampY = (v) => Math.max(300, Math.min(H - 300, v));
+    this.bus = {
+      x0: clampX(cx - Math.cos(a) * L), y0: clampY(cy - Math.sin(a) * L),
+      x1: clampX(cx + Math.cos(a) * L), y1: clampY(cy + Math.sin(a) * L),
+      t: 0, active: true,
     };
+    this.bus.angle = Math.atan2(this.bus.y1 - this.bus.y0, this.bus.x1 - this.bus.x0);
+    this.bus.x = this.bus.x0;
+    this.bus.y = this.bus.y0;
+  }
 
-    const p = findSpot();
-    this.player = new Character(p.x, p.y, 'Tu', getSkin(skinId), true);
+  updateBus(dt) {
+    const b = this.bus;
+    if (!b.active) return;
+    b.t += dt;
+    const k = Math.min(1, b.t / BUS_TIME);
+    b.x = b.x0 + (b.x1 - b.x0) * k;
+    b.y = b.y0 + (b.y1 - b.y0) * k;
+    for (const c of this.chars) {
+      if (!c.alive || c.phase !== 'bus') continue;
+      c.x = b.x;
+      c.y = b.y;
+      // i bot si lanciano ognuno nel suo momento; a fine corsa scendono tutti
+      if ((c.brain && b.t >= c.jumpAt) || k >= 1) this.jump(c);
+    }
+    if (k >= 1) b.active = false;
+  }
+
+  jump(c) {
+    if (c.phase !== 'bus') return;
+    c.phase = 'air';
+    c.alt = 1;
+    c.gliding = false;
+    c.x += (Math.random() - 0.5) * 40;
+    c.y += (Math.random() - 0.5) * 40;
+    if (c === this.player) this.flashMessage('Ti sei lanciato! Guida la caduta con il movimento', '#ffffff', 2.5);
+  }
+
+  openGlider(c) {
+    if (c.phase === 'air' && !c.gliding && c.alt < 0.9) c.gliding = true;
+  }
+
+  // Caduta libera e deltaplano
+  updateAir(c, dt) {
+    let mx = 0;
+    let my = 0;
+    if (c.brain) {
+      const t = c.airTarget;
+      const d = Math.hypot(t.x - c.x, t.y - c.y);
+      if (d > 50) {
+        mx = (t.x - c.x) / d;
+        my = (t.y - c.y) / d;
+      }
+      if (c.alt < c.deployAt) c.gliding = true;
+    } else {
+      mx = c.intent.mx;
+      my = c.intent.my;
+    }
+    if (!c.gliding && c.alt <= AUTO_GLIDER) c.gliding = true;
+    const len = Math.hypot(mx, my);
+    const speed = c.gliding ? GLIDE_SPEED : SKYDIVE_SPEED;
+    if (len > 0.01) {
+      c.x += (mx / len) * speed * dt;
+      c.y += (my / len) * speed * dt;
+      c.angle = Math.atan2(my, mx);
+    }
+    c.x = Math.max(60, Math.min(this.map.width - 60, c.x));
+    c.y = Math.max(60, Math.min(this.map.height - 60, c.y));
+    c.alt -= (c.gliding ? GLIDE_FALL : SKYDIVE_FALL) * dt;
+
+    // scia luminosa dei deltaplani leggendari (solo se si vede)
+    if (c.gliding && c.glider.trail && this.camera && Math.abs(c.x - this.camera.x) < 1400 && Math.abs(c.y - this.camera.y) < 1000) {
+      for (const sd of [-1, 1]) {
+        const a = c.angle + Math.PI / 2;
+        this.particles.push({
+          x: c.x + Math.cos(a) * sd * 44 - Math.cos(c.angle) * 10, y: c.y + Math.sin(a) * sd * 44 - Math.sin(c.angle) * 10,
+          vx: 0, vy: 0, life: 0.6, max: 0.6, size: 4, color: `hsl(${(this.time * 120) % 360}, 90%, 65%)`, top: true,
+        });
+      }
+    }
+
+    if (c.alt <= 0) {
+      // sull'acqua non si atterra: si continua a planare fino a terra
+      if (this.map.isWaterAt(c.x, c.y)) {
+        c.alt = 0.01;
+        c.gliding = true;
+      } else this.land(c);
+    }
+  }
+
+  land(c) {
+    c.phase = 'ground';
+    c.alt = 0;
+    c.gliding = false;
+    moveCircle(c, 0, 0, this.map);
+    for (let i = 0; i < 10; i++) {
+      const a = Math.random() * TAU;
+      this.particles.push({ x: c.x, y: c.y, vx: Math.cos(a) * 120, vy: Math.sin(a) * 120, life: 0.4, max: 0.4, color: '#d8c8a8', size: 4 });
+    }
+    if (c === this.player) this.flashMessage('Atterrato! Cerca armi nelle casse', '#ffffff', 2.5);
+  }
+
+  // Dove plana un bot: un villaggio, una cassa vicino al bus o un punto a caso
+  pickLanding(bot) {
+    const b = this.bus;
+    const k = bot.jumpAt / BUS_TIME;
+    const jx = b.x0 + (b.x1 - b.x0) * k;
+    const jy = b.y0 + (b.y1 - b.y0) * k;
+    const near = this.map.pois.filter((p) => Math.hypot(p.x - jx, p.y - jy) < 3200);
+    if (near.length && this.rng() < 0.6) {
+      const p = near[Math.floor(this.rng() * near.length)];
+      return { x: p.x + (this.rng() - 0.5) * 900, y: p.y + (this.rng() - 0.5) * 900 };
+    }
+    const chests = this.map.chestGrid.query(jx, jy, 2500).filter((ch) => !ch.island);
+    if (chests.length) {
+      const ch = chests[Math.floor(this.rng() * chests.length)];
+      return { x: ch.x + 40, y: ch.y };
+    }
+    return { x: jx + (this.rng() - 0.5) * 3000, y: jy + (this.rng() - 0.5) * 3000 };
+  }
+
+  spawnCharacters(skinId, gliderId, pickaxeId) {
+    // tutti partono sul bus
+    const b = this.bus;
+    this.player = new Character(b.x, b.y, 'Tu', getSkin(skinId), true);
+    this.player.glider = getGlider(gliderId);
+    this.player.pickaxe = getPickaxe(pickaxeId);
+    this.player.phase = 'bus';
     this.chars.push(this.player);
 
     const names = BOT_NAMES.slice().sort(() => this.rng() - 0.5);
     for (let i = 0; i < CONFIG.BOTS; i++) {
-      const s = findSpot();
       const pool = SKINS.filter((k) => k.tier !== 'rank'); // le skin dei rank restano speciali
       const skin = pool[Math.floor(this.rng() * pool.length)];
       const round = Math.floor(i / names.length);
       const name = names[i % names.length] + (round ? ' ' + (round + 1) : '');
-      const bot = new Character(s.x, s.y, name, skin, false);
+      const bot = new Character(b.x, b.y, name, skin, false);
       bot.brain = new BotBrain(bot, this.skillRange);
+      bot.glider = GLIDERS[Math.floor(this.rng() * GLIDERS.length)];
+      bot.pickaxe = PICKAXES[Math.floor(this.rng() * PICKAXES.length)];
+      bot.phase = 'bus';
+      bot.jumpAt = 1.5 + this.rng() * (BUS_TIME - 3);
+      bot.deployAt = 0.45 + this.rng() * 0.35;
+      bot.airTarget = this.pickLanding(bot);
       this.chars.push(bot);
       this.bots.push(bot);
     }
@@ -118,10 +251,15 @@ export class Game {
   update(dt) {
     this.time += dt;
     this.playerCtl.update(dt, this);
-    for (const b of this.bots) if (b.alive) b.brain.update(dt, this);
+    this.updateBus(dt);
+    for (const b of this.bots) if (b.alive && b.phase === 'ground') b.brain.update(dt, this);
 
     for (const c of this.chars) {
-      if (!c.alive) continue;
+      if (!c.alive || c.phase === 'bus') continue;
+      if (c.phase === 'air') {
+        this.updateAir(c, dt);
+        continue;
+      }
       const px = c.x;
       const py = c.y;
       c.update(dt, this);
@@ -173,7 +311,10 @@ export class Game {
     const w = this.player.alive ? this.player.weapon : null;
     // sugli schermi piccoli (telefono) la visuale si allarga un po'
     const screen = Math.max(0.55, Math.min(1, Math.min(this.camera.width, this.camera.height) / 720));
-    const zoom = (w && w.id === 'sniper' ? CONFIG.SNIPER_ZOOM : CONFIG.ZOOM) * screen;
+    const pl = this.player;
+    // dal bus e in volo si vede molto più lontano
+    const height = pl.phase === 'bus' ? 0.4 : pl.phase === 'air' ? 0.5 + (1 - pl.alt) * 0.4 : 1;
+    const zoom = (w && w.id === 'sniper' ? CONFIG.SNIPER_ZOOM : CONFIG.ZOOM) * screen * height;
     this.camera.follow(this.player, dt, this.map.width, this.map.height, zoom);
   }
 
@@ -195,7 +336,7 @@ export class Game {
       // munizioni e materiali si raccolgono passandoci sopra
       if (p.data.kind === 'ammo' || p.data.kind === 'mats') {
         for (const c of this.chars) {
-          if (!c.alive) continue;
+          if (!c.alive || c.phase !== 'ground') continue;
           if (Math.hypot(c.x - p.x, c.y - p.y) < CONFIG.AUTO_PICKUP_RANGE) {
             if (p.data.kind === 'mats' && c.mats >= CONFIG.MAX_MATS) continue;
             this.givePickup(c, p);
@@ -210,7 +351,7 @@ export class Game {
   updateStorm(dt) {
     this.storm.update(dt);
     for (const c of this.chars) {
-      if (!c.alive) continue;
+      if (!c.alive || c.phase !== 'ground') continue;
       if (this.storm.contains(c.x, c.y)) {
         c.stormAcc = 0.5;
         continue;
@@ -261,7 +402,7 @@ export class Game {
     const hx = c.x + Math.cos(c.angle) * (c.r + 20);
     const hy = c.y + Math.sin(c.angle) * (c.r + 20);
     for (const o of this.chars) {
-      if (o === c || !o.alive) continue;
+      if (o === c || !o.alive || o.phase !== 'ground') continue;
       if (Math.hypot(o.x - hx, o.y - hy) < o.r + 14) {
         this.damage(o, CONFIG.PICKAXE_DAMAGE, c);
         this.spark(hx, hy, '#ff5a4a', 6);
@@ -437,7 +578,7 @@ export class Game {
       if (overlapsRect(ob, rect)) return false;
     }
     for (const o of this.chars) {
-      if (o.alive && circleHits(rect, o.x, o.y, o.r - 2)) return false;
+      if (o.alive && o.phase === 'ground' && circleHits(rect, o.x, o.y, o.r - 2)) return false;
     }
     for (const d of map.doors.queryRect(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h)) {
       if (overlapsRect(d, rect)) return false;
@@ -515,7 +656,7 @@ export class Game {
     }
     if (wall.door) {
       const rect = { shape: 'rect', x: wall.x, y: wall.y, w: T, h: T };
-      if (this.chars.some((o) => o.alive && circleHits(rect, o.x, o.y, o.r - 2))) return false;
+      if (this.chars.some((o) => o.alive && o.phase === 'ground' && circleHits(rect, o.x, o.y, o.r - 2))) return false;
       map.doors.remove(wall);
       wall.door = false;
       map.addObstacle(wall);
@@ -726,10 +867,11 @@ export class Game {
     for (const p of this.pickups) if (inView(p)) drawPickup(ctx, p, this.time);
 
     for (const c of this.chars) {
-      if (!c.alive || !inView(c)) continue;
+      if (!c.alive || c.phase !== 'ground' || !inView(c)) continue;
       ctx.save();
       ctx.translate(c.x, c.y);
       drawCharacter(ctx, c.skin, {
+        pickaxe: c.pickaxe,
         angle: c.angle,
         walk: c.walk,
         item: c.current,
@@ -742,6 +884,7 @@ export class Game {
 
     for (const b of this.bullets) b.draw(ctx);
     for (const p of this.particles) {
+      if (p.top) continue;
       ctx.globalAlpha = Math.max(0, p.life / p.max);
       ctx.fillStyle = p.color;
       ctx.beginPath();
@@ -751,6 +894,7 @@ export class Game {
     ctx.globalAlpha = 1;
 
     this.map.drawOverlay(ctx, view, visible, this.player, dt, this.time);
+    this.drawSky(ctx, inView);
 
     // Barre vita dei nemici colpiti di recente (sopra tetti e alberi)
     for (const c of this.chars) {
@@ -813,6 +957,93 @@ export class Game {
 
     this.drawFloats(ctx);
     this.hud.draw(ctx);
+  }
+
+  // Tutto quello che sta in cielo: scie, personaggi in volo con il deltaplano, bus
+  drawSky(ctx, inView) {
+    for (const p of this.particles) {
+      if (!p.top) continue;
+      ctx.globalAlpha = Math.max(0, p.life / p.max);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    for (const c of this.chars) {
+      if (!c.alive || c.phase !== 'air' || !inView(c, 200)) continue;
+      const lift = c.alt * 90;
+      // ombra a terra
+      ctx.fillStyle = `rgba(0,0,0,${0.15 + (1 - c.alt) * 0.15})`;
+      ctx.beginPath();
+      ctx.ellipse(c.x + lift * 0.6, c.y + lift, c.gliding ? 40 : 18, c.gliding ? 22 : 12, 0, 0, TAU);
+      ctx.fill();
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      const sc = 1 + c.alt * 0.5;
+      ctx.scale(sc, sc);
+      drawCharacter(ctx, c.skin, { angle: c.angle, item: null, pickaxe: c.pickaxe, t: this.time, walk: c.gliding ? 0 : this.time * 10 });
+      if (c.gliding) {
+        ctx.rotate(c.angle);
+        drawGlider(ctx, c.glider, this.time);
+      }
+      ctx.restore();
+    }
+    if (this.bus.active) this.drawBus(ctx);
+  }
+
+  // Il bus volante (disegno originale: un autobus con quattro eliche)
+  drawBus(ctx) {
+    const b = this.bus;
+    ctx.save();
+    ctx.translate(b.x + 70, b.y + 110);
+    ctx.rotate(b.angle);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(-90, -34, 180, 68);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.rotate(b.angle);
+    // bracci e eliche
+    for (const [x, y] of [[-60, -48], [60, -48], [-60, 48], [60, 48]]) {
+      ctx.strokeStyle = '#30363d';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(x * 0.6, y * 0.55);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(200,220,240,0.35)';
+      ctx.beginPath();
+      ctx.arc(x, y, 30, 0, TAU);
+      ctx.fill();
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(this.time * 30);
+      ctx.fillStyle = '#2b2f35';
+      ctx.fillRect(-28, -3, 56, 6);
+      ctx.restore();
+    }
+    // carrozzeria
+    ctx.fillStyle = '#1fa59a';
+    ctx.strokeStyle = '#0c4f4a';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(-95, -32, 190, 64, 14);
+    else ctx.rect(-95, -32, 190, 64);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffd34d';
+    ctx.fillRect(-95, -6, 190, 12);
+    // tetto con finestrini
+    ctx.fillStyle = '#e8f6ff';
+    for (let x = -78; x < 70; x += 26) ctx.fillRect(x, -24, 18, 12), ctx.fillRect(x, 12, 18, 12);
+    ctx.fillStyle = '#0c4f4a';
+    ctx.fillRect(80, -26, 10, 52); // parabrezza
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('ZONA BUS', -4, 4);
+    ctx.restore();
   }
 
   drawFloats(ctx) {
